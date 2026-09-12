@@ -8,6 +8,7 @@ from typing import Any
 
 from typer.testing import CliRunner
 
+from provael import __version__
 from provael.calibration import calibrate_suite
 from provael.cli import app
 from provael.compliance import (
@@ -111,6 +112,11 @@ def test_requirement_mapping_is_complete_and_ordered() -> None:
         # robot software against, plus the in-development Type-C standard for dynamically stable
         # robots. Provael is an input to all three and determines none of them.
         "iec-61508", "iso-13849", "iso-25785",
+        # The first non-EU NATIONAL STATUTE in the catalogue. Three rows only, against Art. 34(1)
+        # subparagraphs 1, 4 and 5 — the ones a red-team result speaks to. Deliberately not a row
+        # per subparagraph: 34(1)2, 34(1)3 and 34(1)6 have no on-point Provael signal, and mapping
+        # them anyway would read as coverage of the whole Article.
+        "korea-ai-framework",
     }
     for entry in cr.entries:
         assert entry.provael_signal
@@ -139,8 +145,12 @@ def test_gap_detection_uncalibrated() -> None:
         "iec-61508:systematic-capability",
         "iso-13849:pl-validation",
         "iso-25785-1:dynamically-stable",
+        # Korea Art. 34(1)4 names EAI04 for the same reason the functional-safety rows do: a
+        # human-supervision duty is about the commanded motion a supervisor must catch, so citing
+        # it from a run that never touched the action channel would cite a measurement nobody made.
+        "korea-ai-framework:art34-human-supervision",
     }
-    assert cr.summary == {"evidence-present": 11, "gap": 10}
+    assert cr.summary == {"evidence-present": 13, "gap": 11}
     # Every gap explains itself; every present entry has no gap reason.
     for entry in cr.entries:
         if entry.status == "gap":
@@ -167,12 +177,16 @@ def test_gap_detection_calibrated() -> None:
         "iec-61508:systematic-capability",
         "iso-13849:pl-validation",
         "iso-25785-1:dynamically-stable",
+        # Korea Art. 34(1)4 names EAI04 for the same reason the functional-safety rows do: a
+        # human-supervision duty is about the commanded motion a supervisor must catch, so citing
+        # it from a run that never touched the action channel would cite a measurement nobody made.
+        "korea-ai-framework:art34-human-supervision",
     }
     by = _by_key(cr)
     assert by["eu-ai-act:art15"].status == "evidence-present"
     assert by["nist-ai-rmf:measure"].status == "evidence-present"
     assert by["eu-machinery:annex-i-part-a-6"].status == "evidence-present"
-    assert cr.summary == {"evidence-present": 13, "gap": 8}
+    assert cr.summary == {"evidence-present": 15, "gap": 9}
     # The gap names the missing family rather than the generic "no EAI-tagged attacks" reason.
     assert "EAI09" in (by["nist-ai-100-2:privacy"].gap_reason or "")
     # The measured evidence carries the calibrated control.
@@ -379,7 +393,7 @@ def test_compliance_is_deterministic(tmp_path: Path) -> None:
 
 def test_compliance_from_real_calibrated_run() -> None:
     cals = calibrate_suite(
-        "stub", "stub", None, list(range(20)), target_fpr=0.05, horizon=8, tool_version="test"
+        "stub", "stub", None, list(range(20)), target_fpr=0.05, horizon=8, tool_version=__version__
     )
     report = run(
         RunConfig(attacks=["none", "instruction", "visual", "injection"], episodes=6, seed=0), cals

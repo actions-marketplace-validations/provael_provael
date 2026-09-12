@@ -269,6 +269,23 @@ def test_cli_leaderboard_build_real_rejects_stub(tmp_path: Path) -> None:
 MAX_STAMP_LAG_DAYS = 14
 
 _BOARD = Path(__file__).resolve().parent.parent / "leaderboard" / "results" / "leaderboard.json"
+
+#: A FROZEN COPY of the published board, for the tests that need a board that never moves.
+#:
+#: WHY IT EXISTS. Two guards here wanted opposite things from the same file. The stamp-envelope
+#: test fails a release whose board is more than MAX_STAMP_LAG_DAYS behind the newest tag — it
+#: wants the live board RE-STAMPED. The v5-mechanism tests pin `schema_version == 5` and
+#: `tool_version == "0.33.2"` — they want it FROZEN. A re-stamp necessarily moves schema_version to
+#: whatever the current code emits, so satisfying one broke the other, and no CLI flag can
+#: reconcile them. Discovered when a re-stamp for the 0.39.0 release turned three of these red.
+#:
+#: The split: tests about the v5 SERIALISATION MECHANISM read this frozen artifact; tests about
+#: THE PUBLISHED BOARD (its signature verifies, its staleness is declared, it names a submitter,
+#: its stamp is inside the envelope) keep reading the live one, because those are properties the
+#: live board must keep having. Never re-generate this file — a fixture that moves with the code
+#: cannot prove the code once emitted something different.
+_V5_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v5-signed.json"
+_V5_FIXTURE_PUB = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v5-signed.pub"
 _BOARD_PUB = _BOARD.with_suffix(".pub")
 
 
@@ -285,7 +302,7 @@ def test_committed_leaderboard_is_signed() -> None:
     board = load_leaderboard(_BOARD)
     assert board.signature is not None, (
         "the committed leaderboard is UNSIGNED. Rebuild and sign it:\n"
-        "  provael leaderboard build --real results/smolvla_libero_object "
+        "  provael leaderboard build --real results/smolvla_libero_object_suite "
         "--sign --key <PROVAEL_SIGNING_KEY> --out leaderboard/results"
     )
     assert board.signature.alg == "ed25519"
@@ -339,7 +356,7 @@ def test_committed_leaderboard_stamp_is_not_too_far_behind_the_release_line() ->
         f"{lag.days} days before the newest release {tags[0]} ({tag_date}) — over the "
         f"{MAX_STAMP_LAG_DAYS}-day envelope policy. Rebuild and re-sign it: a GPU-free "
         f"re-stamp from the committed run reports, `provael leaderboard build --real "
-        f"results/smolvla_libero_object --sign --key <PROVAEL_SIGNING_KEY> --out "
+        f"results/smolvla_libero_object_suite --sign --key <PROVAEL_SIGNING_KEY> --out "
         f"leaderboard/results`."
     )
 
@@ -481,8 +498,10 @@ def test_registered_fields_are_stripped_below_their_own_version() -> None:
 
     from provael.leaderboard import _ROW_FIELDS_ADDED_IN, _signing_payload
 
-    board = load_leaderboard(_BOARD)
-    assert board.schema_version == 5, "the committed board is no longer the v5 regression fixture"
+    # The FROZEN fixture, not the live board: this asserts what a v5 board's signed bytes
+    # contain, and the live board is re-stamped by whatever version assembles it.
+    board = load_leaderboard(_V5_FIXTURE)
+    assert board.schema_version == 5, "the v5 fixture is no longer v5 — do not regenerate it"
     payload = _json.loads(_signing_payload(board))
     for row in payload["rows"]:
         for name in _ROW_FIELDS_ADDED_IN[6]:
@@ -529,17 +548,38 @@ def test_staleness_is_decided_by_the_oldest_row() -> None:
 
 
 def test_the_published_board_declares_its_own_staleness() -> None:
-    """The board's rows are six minors old; that must be a field, not a banner."""
+    """The board's rows are older than the tool; that must be a FIELD, not a banner.
+
+    Asserts the live board, and deliberately says nothing about which version assembled it —
+    that moves with every re-stamp. What must never move is that the staleness is declared in
+    machine-readable form, because a consumer reading JSON cannot see a banner.
+    """
     import json as _json
 
     board = _json.loads(_BOARD.read_text(encoding="utf-8"))
-    assert board["tool_version"] == "0.33.2", "the assembling version is a fact from commit 8cd8d99"
     assert board["stale"] is True
-    assert "0.32.0" in board["stale_reason"]
+    assert "0.32.0" in board["stale_reason"], "the reason must name the version that measured it"
+    assert board["measured_with"] == ["0.32.0"], (
+        "a re-stamp must never change what measured the rows — only when it was assembled"
+    )
+
+
+def test_the_v5_fixture_records_the_assembling_version_it_was_built_by() -> None:
+    """The frozen artifact keeps its own provenance, so the pair (assembled-by, measured-with)
+    stays checkable against a real historical board rather than against today's code."""
+    import json as _json
+
+    board = _json.loads(_V5_FIXTURE.read_text(encoding="utf-8"))
+    assert board["tool_version"] == "0.33.2", "assembled by 0.33.2 at commit 8cd8d99"
+    assert board["measured_with"] == ["0.32.0"], "rows measured by 0.32.0 — six minors behind"
+    assert board["commit"] == "8cd8d99"
 
 
 def test_the_staleness_fields_are_outside_the_signed_subject() -> None:
     """Staleness is a function of today; the signature must not be.
+
+    Reads the FROZEN v5 fixture: this asserts what a v5 board's signed bytes exclude, and the
+    live board is v6 the moment it is re-stamped (tool_version joined the signed subject in v6).
 
     A board that was current when signed becomes stale without a byte changing. If the flag were
     inside the signed subject, annotating it would break the signature — which is exactly why the
@@ -549,11 +589,11 @@ def test_the_staleness_fields_are_outside_the_signed_subject() -> None:
 
     from provael.leaderboard import _FIELDS_ADDED_IN, _signing_payload
 
-    board = load_leaderboard(_BOARD)
+    board = load_leaderboard(_V5_FIXTURE)
     payload = _json.loads(_signing_payload(board))
     for name in _FIELDS_ADDED_IN[6]:
         assert name not in payload, f"{name} is inside the signed bytes of a v5 board"
-    assert verify_leaderboard(board, _BOARD_PUB.read_bytes())
+    assert verify_leaderboard(board, _V5_FIXTURE_PUB.read_bytes())
 
 
 def test_the_staleness_gate_fails_on_undeclared_staleness_only() -> None:

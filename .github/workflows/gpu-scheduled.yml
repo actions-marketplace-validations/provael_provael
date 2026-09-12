@@ -1,0 +1,242 @@
+# Scheduled real-model GPU red-team (SmolVLA x LIBERO) via Modal — budget-capped, OFF by default.
+#
+# This runs the GATED integration path on a real GPU on a schedule, so the repo's honest transfer
+# numbers stay fresh without a maintainer running anything by hand. It is deliberately isolated from
+# ci.yml: the CPU core CI never installs the [lerobot] extra, never touches a GPU, and stays free and
+# green regardless of this file.
+#
+# WHY WEEKLY, AND WHY THE RUN SHRANK. This was nightly at `--seeds 10`, advertised as ~$0.02/run.
+# That figure was never recomputed after the run grew. `none,instruction,visual,injection` expands
+# to EIGHT arms, and `task_ids` defaults to one task, so ten seeds is 80 episodes. This repo's own
+# measured anchor is 400 episodes in 15.4 L4-hours, i.e. ~139 s/episode — so 80 episodes is ~3
+# hours against a 1h Modal timeout. Every night it would have burned the full hour, been killed,
+# recorded nothing, and cost ~$0.80: about $24/month of a $30/month credit, for no measurement.
+#
+# The schedule was the expensive part, not the run. Two seeds is 16 episodes, ~37 min, ~$0.49/run,
+# and it finishes, which the nightly never could. The badge this feeds carries a timestamp and no
+# rate, so fewer seeds cannot weaken a published number.
+#
+# WHY TWICE A WEEK RATHER THAN WEEKLY. The cadence is derived from the badge, not chosen: watch.py
+# sets STALE_DAYS = 7, so a seven-day cadence sits exactly on the red boundary and one missed run
+# turns the badge red. Tuesday and Friday give gaps of three and four days, which holds the window
+# with margin, at ~$4.25/month of a $30/month credit. Green needs FRESH_DAYS = 2, i.e. a run every
+# other day at ~$7.40/month, which is not worth a quarter of the budget for a canary.
+#
+# This file is named for the fact that it is scheduled, not for its cadence, because the cadence is
+# a tuning parameter of STALE_DAYS and has already changed once.
+#
+# COST SAFETY (handoff to enable):
+#   * Disabled unless the repo variable `ENABLE_GPU_SCHEDULED` is set to "true" (Settings -> Variables).
+#     Until then every run no-ops in seconds, so a fork or an unconfigured repo can never spend.
+#   * The GPU work runs inside Modal (examples/gpu-ci/modal_provael_gpu.py), which caps each run at
+#     one L4 for <=1h and shuts the container down — the budget cap lives with the job. That cap is
+#     now a backstop rather than the expected runtime, which is the point of the change above.
+#   * Requires the MODAL_TOKEN_ID / MODAL_TOKEN_SECRET secrets; without them the job cannot bill.
+name: GPU red-team (scheduled, Modal)
+
+on:
+  schedule:
+    - cron: "17 4 * * 2,5"  # Tue + Fri 04:17 UTC (off-peak, off the :00 fleet spike)
+  workflow_dispatch: {}     # allow a manual, maintainer-triggered run
+
+# One run at a time; a new run supersedes an in-flight one so overlaps can't double-spend.
+concurrency:
+  group: gpu-scheduled
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gpu-redteam:
+    # WRITE, because the measurement has to survive the runner. See "Keep the measurement" below:
+    # for five runs this lane measured, recorded, and threw the record away with the container.
+    permissions:
+      contents: write
+    # Opt-in only: no variable set -> no run -> no spend.
+    if: ${{ vars.ENABLE_GPU_SCHEDULED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # persist-credentials: true, deliberately. This was false, which is the right default for a
+      # lane that only reads — and this one has to push the measurement it produces or the whole
+      # run is discarded. Scoped by `permissions: contents: write` on the job above.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the Modal client
+        run: pip install "modal>=0.64"
+
+      # `set -o pipefail` is load-bearing, not hygiene. `modal run ... | tee` reports TEE's exit
+      # status, so for 22 days this step stayed green while modal exited on "has no functions or
+      # local entrypoints" and measured nothing. A lane that cannot fail is a lane that cannot
+      # report, and the freshness badge was the only thing telling anyone.
+      - name: Run the real SmolVLA x LIBERO red-team on a Modal GPU
+        shell: bash
+        run: |
+          set -o pipefail
+          modal run examples/gpu-ci/modal_provael_gpu.py | tee gpu-scheduled-report.txt
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+
+      # Record the measurement so the freshness badge has something to age. Guarded on the report
+      # actually existing: a run that failed must NOT stamp a fresh measurement time, or the
+      # badge would report currency for a run that never produced a number — the precise failure
+      # the badge exists to make visible. Freshness badge refresh is a separate, cheap, always-on
+      # job (freshness.yml); this step only records.
+      # FAILS where it used to warn. A warning inside a green job is the failure mode itself: this
+      # step emitted one on every run from 30 Aug to 3 Sep 2026 while the lane reached a real policy
+      # and printed a real ASR, and watch/freshness.json sat at 2026-08-09 the whole time (#181).
+      # The measurement happening and the measurement being recorded are different events, and only
+      # the second one moves the badge — so the second one is what this step reports on.
+      - name: Record the measurement in the watch ledger
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # READ the path the run declared. Do not search for it.
+          #
+          # THE SEARCH COULD NOT WORK, and it took a fourth failure of this lane to see it. This
+          # step used to run `find . -name report.json -newer gpu-scheduled-report.txt`, and that
+          # predicate is unsatisfiable by construction: the local entrypoint prints its closing
+          # line AFTER writing the artifacts, that line goes through the same `tee` that produces
+          # gpu-scheduled-report.txt, so the log is always newer than the report it announces.
+          # On 4 Sept 2026 — the first scheduled run after #181's fix landed — the lane reached a
+          # real policy, printed `Adversarial ASR: 33.3% (4/12)`, wrote three artifacts, and this
+          # step said it had produced none.
+          #
+          # #181 fixed the lane so it WRITES its measurement; this fixes the lane so it can be
+          # TOLD where. The filename below is mirrored from `OUT_DIR_FILE` in
+          # examples/gpu-ci/modal_provael_gpu.py and pinned by
+          # tests/test_modal_examples_are_runnable.py, so the two cannot drift apart silently.
+          outdir_file=gpu-scheduled-outdir.txt
+          if [ ! -f "$outdir_file" ]; then
+            echo "::error::the run did not declare an output directory ($outdir_file is absent),"
+            echo "::error::so nothing was recorded and the freshness badge keeps ageing. Either the"
+            echo "::error::local entrypoint failed before writing its artifacts, or it no longer"
+            echo "::error::writes OUT_DIR_FILE — see examples/gpu-ci/modal_provael_gpu.py."
+            exit 1
+          fi
+          outdir="$(cat "$outdir_file")"
+          if [ ! -f "$outdir/report.json" ]; then
+            echo "::error::the run declared $outdir but no report.json is there. The measurement"
+            echo "::error::was not recorded. This is #181's shape again: check that"
+            echo "::error::examples/gpu-ci/modal_provael_gpu.py still RETURNS its artifacts AND"
+            echo "::error::that the entrypoint writes them before declaring the path."
+            ls -la "$outdir" 2>/dev/null || echo "(the directory does not exist)"
+            exit 1
+          fi
+          pip install --quiet -e .
+          provael watch --record "$outdir" --dir watch
+          echo "recorded $outdir/report.json"
+          echo "OUTDIR=$outdir" >> "$GITHUB_ENV"
+
+      # KEEP THE MEASUREMENT. The fifth failure of this lane, and the first where everything worked.
+      #
+      # `provael watch --record` appends to watch/watch.jsonl and watch/trials.jsonl in the RUNNER'S
+      # working tree. This job declared `contents: read`, checked out with `persist-credentials:
+      # false`, and uploaded only the log. So on 5 September 2026 run 33974192486 reached a real
+      # policy, printed `Adversarial ASR: 33.3% (4/12)`, logged `recorded smolvla x libero (4/14)
+      # measured with provael 0.39.1` — and the container shut down and took it with it. Neither
+      # watch.jsonl nor trials.jsonl has ever existed in this repository. freshness.yml recomputed
+      # the next morning from what was committed, found nothing new, and watch/freshness.json stayed
+      # at 2026-08-09. www.provael.com fails its own build once that passes 30 days.
+      #
+      # COMMITTING watch.jsonl ALONE WOULD HAVE BEEN WORSE THAN NOTHING, and this was simulated
+      # before it was written. `latest_measurement()` unions the watch log with the committed
+      # manifests; `scripts/gen_measurement_ledger.py` reads ONLY results/. So the badge would have
+      # gone brightgreen while the ledger's newest row stayed a month old, and
+      # test_measurement_ledger.py::test_newest_real_measurement_agrees_with_the_badge would have
+      # failed — correctly. www.provael.com renders that ledger on /results, so the shipped state
+      # would have been a green "measured today" banner above a table whose newest row was August.
+      #
+      # So the run is committed to results/, which is what results/ is for, and both surfaces read
+      # the same tree. Simulated against a copy of results/ first: ledger row present with a real
+      # artifactPath, badge and ledger agreeing on the instant.
+      #
+      # WHAT THIS GROWS. Three small JSON/Markdown files twice a week, roughly 2 MB a year, and two
+      # ledger rows a week on /results. That is readable now and will not be forever; when it stops
+      # being readable the answer is pagination on the page, never pruning the record here.
+      - name: Keep the measurement
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ended="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['ended_at'])" \
+            "$OUTDIR/execution-manifest.json")"
+          dest="results/gpu-scheduled/$(echo "$ended" | tr -d ':-')"
+          mkdir -p "$dest"
+          cp "$OUTDIR"/*.json "$OUTDIR"/*.md "$dest"/ 2>/dev/null || cp "$OUTDIR"/*.json "$dest"/
+          echo "placed the run at $dest"
+
+          # Regenerate exactly the two artifacts derived from results/, so neither can disagree
+          # with the tree it is derived from. NOT watch/coverage.json or watch/registry.json:
+          # despite living in the same directory those are a shields.io TEST-coverage badge and a
+          # code-derived registry, both owned by coverage-badge.yml. Writing `provael coverage
+          # --json` over coverage.json would replace a badge with a different shape entirely.
+          python scripts/gen_measurement_ledger.py
+
+          # DELETE THE LOG BEFORE REGENERATING THE BADGE. Not housekeeping — this is the bug the
+          # first version of this step shipped, on its first real run.
+          #
+          # `latest_measurement()` unions read_measurements(watch/) with the committed manifests and
+          # takes the max. The `--record` step above writes watch/watch.jsonl with `measured_at =
+          # _now()`, which is wall-clock at RECORD time; the manifest carries `ended_at`, which is
+          # when the run actually finished. On run 34051694289 those were 19:03:58 and 19:03:46. So
+          # the badge took 19:03:58 from a file this step then declined to commit, the ledger took
+          # 19:03:46 from the run that WAS committed, and
+          # test_newest_real_measurement_agrees_with_the_badge went red on main — correctly. The
+          # badge was asserting an instant no committed artifact supported.
+          #
+          # The log stays uncommitted for the reason below; what changed is that it is also gone
+          # before anything reads it. The badge now derives from exactly the tree that ships.
+          #
+          # WHY THE LOG IS NOT COMMITTED: the run is in results/, which is the one tree both the
+          # ledger and the badge read. Committing the log as well would put the same measurement in
+          # two places read by different code paths — the exact asymmetry that made committing the
+          # log ALONE unsafe.
+          rm -f watch/watch.jsonl watch/trials.jsonl
+          provael watch --dir watch || true
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$dest" watch/measurements.json watch/freshness.json
+          if git diff --cached --quiet; then
+            echo "::error::the run produced $dest and git sees nothing to commit. The measurement"
+            echo "::error::is about to be discarded again — this is the defect this step exists for."
+            exit 1
+          fi
+          # [skip ci]: this lands in watch/**, which triggers freshness.yml — a self-retrigger loop
+          # masked only by GitHub declining to run workflows on GITHUB_TOKEN pushes. Same note as
+          # freshness.yml carries; do not rely on that alone.
+          git commit -m "chore(results): keep the scheduled GPU measurement [skip ci]"
+
+          # Rebase-and-retry rather than fail: freshness.yml and coverage-badge.yml also push to
+          # main on their own schedules, and losing a real GPU measurement to a race would be the
+          # sixth version of this bug.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected, rebasing (attempt $attempt)"
+            git pull --rebase --autostash
+          done
+          echo "::error::could not push the measurement after 3 attempts. It exists in this runner"
+          echo "::error::and nowhere else, which is exactly how the previous five were lost."
+          exit 1
+
+      - name: Upload the run artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpu-scheduled-report
+          path: gpu-scheduled-report.txt
+          retention-days: 30
+      # HANDOFF: to emit a *signed* attestation artifact, have the Modal entrypoint run
+      # `provael attest` on the produced report and return its JSON, then persist it here. The
+      # signing key belongs in Modal secrets (never in this repo). See ROADMAP §5 / P0.5b.

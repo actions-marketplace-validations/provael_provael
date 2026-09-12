@@ -26,7 +26,20 @@ import typer.main
 
 from provael.cli import app
 
-ROADMAP = Path(__file__).resolve().parent.parent / "docs" / "roadmap.md"
+ROOT = Path(__file__).resolve().parent.parent
+ROADMAP = ROOT / "docs" / "roadmap.md"
+
+#: Capabilities that ship as CONFIG rather than as a CLI command, with the committed evidence
+#: that each is wired. Keyword -> (human name, [(file, substring proving it is live)]).
+#: Deliberately short and literal: the point is to cover the class the CLI check cannot see,
+#: not to build a second roadmap parser.
+CONFIG_WIRED: tuple[tuple[str, str, tuple[tuple[Path, str], ...]], ...] = (
+    (
+        "mike",
+        "docs-site versioning",
+        ((ROOT / "pyproject.toml", '"mike",'), (ROOT / "mkdocs.yml", "provider: mike")),
+    ),
+)
 
 #: Command names too generic to search for — every roadmap mentions "run" and "report" in prose.
 _TOO_GENERIC = frozenset({"run", "report", "list", "version", "doctor", "init", "show"})
@@ -92,3 +105,68 @@ def test_signing_claims_do_not_appear_in_planned(phrase: str) -> None:
     ever appears under Planned too, the file is contradicting itself again — which is exactly the
     shape of the defect this module was written for."""
     assert phrase not in _planned_section().lower()
+
+
+def test_no_config_wired_capability_is_listed_as_planned() -> None:
+    """The class `test_no_shipped_cli_command_is_listed_as_planned` structurally cannot see.
+
+    That test keys on CLI command names and its docstring is honest that a feature shipping without
+    a command is invisible to it. Docs-site versioning is exactly that shape: `mike` registers no
+    `provael` subcommand, so wiring it while the roadmap still discussed it under Planned would have
+    left the repo contradicting itself with nothing failing — the same defect as the leaderboard
+    one, in the only place the original check has no reach.
+
+    Kept narrow on purpose. It fires only when the capability is demonstrably wired in committed
+    config, so it cannot nag about something merely intended.
+    """
+    planned = _planned_section()
+    offenders = []
+    for keyword, name, evidence in CONFIG_WIRED:
+        if not re.search(rf"\b{re.escape(keyword)}\b", planned):
+            continue
+        if all(marker in path.read_text(encoding="utf-8") for path, marker in evidence):
+            offenders.append(f"{keyword} ({name})")
+    assert not offenders, (
+        f"docs/roadmap.md discusses these under '## Planned', but the committed config shows them "
+        f"wired today: {offenders}. Move the entry and say when it landed — including when the "
+        f"entry is a decision AGAINST the thing, which is worse than a stale plan: it tells a "
+        f"reader the opposite of what the repo does."
+    )
+
+
+#: Registered families the Planned section MAY name, with the reason. The planned work has to be
+#: about a shipped family rather than the family itself, and saying which is the price of the
+#: exception — a bare allowlist is how a check stops meaning anything.
+_PLANNED_MAY_NAME = {
+    "optimized": "the planned item is a real-model transfer of an already-shipped family, "
+    "not the family",
+}
+
+
+def test_no_registered_attack_family_is_listed_as_planned() -> None:
+    """The third class, and the one that let `gradient_patch` sit under Planned after it shipped.
+
+    `test_no_shipped_cli_command_is_listed_as_planned` keys on CLI command names and
+    `test_no_config_wired_capability_is_listed_as_planned` on committed config. An attack family is
+    neither: it registers no subcommand and lives in no config file, so `gradient_patch` shipped in
+    0.39.0 on 1 September 2026 while this file still listed white-box gradient attacks as Planned
+    and `SAFETY.md` still said the registry used no gradients or model internals. Nothing failed.
+
+    Backticked names only. Half the registry is ordinary English — `action`, `visual`, `control`,
+    `instruction` — and matching those as bare words would make this fire on prose, which is the
+    failure mode `_TOO_GENERIC` already exists to avoid above.
+    """
+    from provael.attacks.registry import available_families
+
+    planned = _planned_section()
+    offenders = [
+        family
+        for family in sorted(available_families())
+        if family not in _PLANNED_MAY_NAME and f"`{family}`" in planned
+    ]
+    assert not offenders, (
+        f"docs/roadmap.md names these under '## Planned', but they are REGISTERED attack families "
+        f"today: {offenders}. Move them to Shipped with the release that carried them, and check "
+        f"SAFETY.md in the same commit — it enumerates the families and their threat models, so a "
+        f"family it does not know about is a safety document that is wrong, not merely stale."
+    )

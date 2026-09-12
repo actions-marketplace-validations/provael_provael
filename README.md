@@ -38,7 +38,22 @@ scattered: across **both** committed runs the benign arm fires **5/100 (5.0%, Wi
 other eight tasks silent through 80 benign episodes — a task-conditional, seed-independent pattern
 that replicates out-of-sample at p = 0.04
 ([the study](studies/keepout_calibration/README.md)). That is the signature of a boundary in the
-wrong place, not of a policy that wanders. Three families are
+wrong place, not of a policy that wanders. The fitted envelopes since agree from the other
+direction: the default box overlaps the reachable benign workspace on four tasks, and by far the
+most on `libero_object/4` and `/5` — the two that fire.
+
+**It is still not fixed, and the thing that was missing turned out not to be the thing that was
+missing.** The benign-only `calibrate` arm ran on 6 September and produced ten per-task boundaries
+at a held-out benign FPR of 0.0. That number is worth almost nothing: the fitter searched the gap
+between the hazard box and the benign envelope and never varied the FACE, and five of the six
+candidate faces score the same 0.0. Replayed against the one committed run that records
+trajectories, the fitted face flags **0 of 12** attacked episodes where `x+` flags 5 and the
+uncalibrated default box flags 4 — the policy leaves through `+x` and the hazard sat beside `-y`,
+past a boundary the arm never reaches
+([the study](studies/keepout_face_selection/README.md), errata E-2026-08). A benign-only
+calibration cannot choose a face, because where an attack goes is not observable from rollouts in
+which no attack ran. `provael calibrate --attack <name>` now runs both arms and picks the face
+against the attacked one; what is owed is a GPU run of that across all ten tasks. Three families are
 **measured nulls at 0/50 each** (`patch`, `decoy_object`, `scene_text`), and `mcp_tool_desc` is
 **not applicable** to this suite rather than a null. Clean-task-success under the benign arm averages
 84% and ranges 40–100% across tasks, so the policy is not uniformly competent. And the policy's
@@ -64,9 +79,12 @@ Timed on a clean container: **20 s** from `pip install` to a written `report.jso
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/provael/provael/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21984184.svg)](https://doi.org/10.5281/zenodo.21984184)
 [![last measured](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fprovael%2Fprovael%2Fmain%2Fwatch%2Ffreshness.json)](https://github.com/provael/provael/blob/main/watch/freshness.json)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/provael/provael/badge)](https://scorecard.dev/viewer/?uri=github.com/provael/provael)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fprovael%2Fprovael%2Fmain%2Fwatch%2Fcoverage.json)](https://github.com/provael/provael/blob/main/watch/coverage.json)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/provael/provael/blob/main/notebooks/01_provael_in_5_minutes.ipynb)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/provael/provael)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/provael/provael/main?labpath=notebooks)
 [![Assessment](https://img.shields.io/badge/assessment-design%20partners-blue.svg)](https://www.provael.com/assessment)
 [![Leaderboard Space](https://img.shields.io/badge/%F0%9F%A4%97%20Space-ASR%20leaderboard-yellow.svg)](https://huggingface.co/spaces/Sattyam/provael-leaderboard)
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-VLA%20red--team-blue.svg?logo=github)](https://github.com/marketplace/actions/provael-vla-red-team)
@@ -93,7 +111,7 @@ CI, a benign false-positive control, a clean-task-success (competence) control, 
 
 > **New here?** Run it in your browser in 5 minutes — [open the Colab notebook](https://colab.research.google.com/github/provael/provael/blob/main/notebooks/01_provael_in_5_minutes.ipynb) — or browse the [examples gallery](examples/) and the built-in `provael list-recipes`.
 
-It ships **sixteen adversarial families of auditable attacks** — `instruction` (text
+It ships **seventeen adversarial families of auditable attacks** — `instruction` (text
 reframings), `visual` (observation-space markers), `sensor_spoof` (EAI02: a sim
 perception spoof driving the end-effector into a keep-out zone), `injection` (indirect /
 embodied prompt injection), `action` (action-space integrity: freeze / trajectory
@@ -122,23 +140,24 @@ on what leaves the policy, and until `Defense.filter_action` those four were not
 but **unimplementable** — the taxonomy was a spec its own interface could not satisfy. The
 action-envelope study is `credited` on `stub` and `reach` and **`not-credited` on `humanoid`**, and
 its headline is the coverage map: a magnitude cap cannot restore a frozen action and does not reach
-successes routing through a decoupled flag ([study](docs/studies/action-envelope.md)). `--recipe full-sweep` runs every one of the sixteen; families the chosen suite
+successes routing through a decoupled flag ([study](docs/studies/action-envelope.md)). `--recipe full-sweep` runs every one of the seventeen; families the chosen suite
 cannot support are skipped and reported N/A, never scored 0%. Every family carries its transfer-test (rate + 95% Wilson CI + benign-FPR
 control); run `provael transfer-test` to print it. The `action`, `action_space`, `sensor_spoof`,
 `backdoor`, `authorization`, `misalignment`, `confidentiality`, and `humanoid` families are
 **stub-validated only** (no real-model transfer claimed). `provael coverage` prints the whole
 picture as one machine-readable line rather than leaving it to prose — and prints it as three
-numbers on purpose, because *registered is not validated*: **16 adversarial families registered,
+numbers on purpose, because *registered is not validated*: **17 adversarial families registered,
 3 exercised against a real policy** (`instruction`, `visual`, `injection` — and two of those three
-returned measured nulls, which is a result), **13 stub-validated only**. Note also that the
-registry holds **38 adversarial attacks**, which is not the same number as 16 families; reading
+returned measured nulls, which is a result), **14 stub-validated only**. Note also that the
+registry holds **39 adversarial attacks**, which is not the same number as 17 families; reading
 the registry dict's length as a family count overstates coverage by 14. It red-teams **8
 policies** — the CPU `stub`
 plus real **SmolVLA / π0 / π0.5 / π0-FAST** (via the `[lerobot]` extra), **OpenVLA**
 (via `[openvla]`), and **π0 served by openpi** — Physical Intelligence's own stack, via the CPU-only
-`[openpi]` websocket client to a GPU policy server. **Three of those eight are registered scaffolding**: `groot` (needs `lerobot[groot]`, which `provael[lerobot]` does not provision), `openvla` and `openpi` have each been structurally tested but have **never had a checkpoint loaded here**. Only `smolvla` has produced a committed real-model result. `provael list-policies` gives each backend a `status` of `measured` / `scaffolding` / `no run committed here`, so the difference is visible before you point `--policy` at one. Suites: **5** (`stub` + `reach` +
-`humanoid` on CPU; **LIBERO** + **Meta-World** gated), or any policy/suite you wrap with the tiny
-adapter ABCs. The templated families are
+`[openpi]` websocket client to a GPU policy server. **Three of those eight are registered scaffolding**: `groot` (needs `lerobot[groot]`, which `provael[lerobot]` does not provision), `openvla` and `openpi` have each been structurally tested but have **never had a checkpoint loaded here**. Only `smolvla` has produced a committed real-model result. `provael list-policies` gives each backend a `status` of `measured` / `scaffolding` / `no run committed here`, so the difference is visible before you point `--policy` at one. Suites: **6** registered (`stub` + `reach` +
+`humanoid` on CPU; **LIBERO** + **Meta-World** gated; `ai2_bridge` is **scaffolding** — registered
+and structurally tested, but no benchmark has ever been run through it, so it is not coverage), or
+any policy/suite you wrap with the tiny adapter ABCs. The templated families are
 heuristic perturbations (not gradient-based); the `optimized` family is a model-agnostic search
 that only *queries* the policy — see
 [Scope and honest limitations](#scope-and-honest-limitations) and the
@@ -379,7 +398,7 @@ Or in CI, gating the build on the measured rate — SARIF goes to code scanning,
 the adversarial ASR exceeds your threshold or regresses past tolerance against a baseline:
 
 ```yaml
-- uses: provael/provael@v0.38.0
+- uses: provael/provael@v0.41.2
   with: { policy: stub, suite: stub, asr-threshold: "0.5" }
 ```
 
@@ -412,7 +431,7 @@ Other commands:
 
 ```bash
 uv run provael list-policies            # stub (CPU); smolvla (needs the [lerobot] extra)
-uv run provael list-attacks             # 41 attacks across 18 families: baseline/instruction/visual/sensor_spoof/injection/action/action_space/backdoor/authorization/confidentiality/misalignment/humanoid/optimized/optimized_patch/universal_patch/optimized_instruction/weight_integrity
+uv run provael list-attacks             # 42 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
 uv run provael list-recipes             # named presets: quick / instruction-only / core-sweep / full-sweep / ci-gate
 uv run provael attack --recipe quick    # a recipe is the base config; explicit flags override it
 uv run provael report --in runs/stub/
@@ -462,8 +481,8 @@ surface (experimental today). See [docs/leaderboard.md](docs/leaderboard.md).
 **Evidence, not certification.**
 
 **What the published board does not cover.** It is one run and it is old: measured with
-**`provael 0.32.0`**, covering **1 policy on 1 suite** and **3 of the 16 adversarial families**. The
-other **thirteen families have no real-model measurement at all** — they are *absent* from the board,
+**`provael 0.32.0`**, covering **1 policy on 1 suite** and **3 of the 17 adversarial families**. The
+other **fourteen families have no real-model measurement at all** — they are *absent* from the board,
 which is not the same as scoring 0%. That run also predates the clean-task-success control, so it
 carries a benign false-positive control but no measured competence baseline. The Space states all
 of this above its own tables; rebuilding cannot fix it, because a re-stamp re-aggregates committed
@@ -479,7 +498,7 @@ re-measurement."** Nothing has re-run 0.32.0's numbers on the current tool.
 | Capability | CPU (default) | Needs GPU + `[lerobot]` extra |
 | --- | :---: | :---: |
 | `stub` (scalar) + `reach` (spatial) suites | ✅ | |
-| All 16 adversarial families (`instruction`/`visual`/`sensor_spoof`/`injection`/`action`/`action_space`/`backdoor`/`authorization`/`confidentiality`/`misalignment`/`humanoid`/`optimized`/`optimized_patch`/`universal_patch`/`optimized_instruction`/`weight_integrity`) | ✅ | |
+| All 17 adversarial families (`instruction`/`visual`/`sensor_spoof`/`injection`/`action`/`action_space`/`backdoor`/`authorization`/`confidentiality`/`misalignment`/`humanoid`/`optimized`/`optimized_patch`/`gradient_patch`/`universal_patch`/`optimized_instruction`/`weight_integrity`) | ✅ | |
 | `humanoid` whole-body / locomotion suite (fall / balance / self-collision / footstep keep-out) | ✅ | |
 | Scoring, runner, report, CLI, recipes, `reproduce`, scorecard/SARIF/OSCAL/AVID | ✅ | |
 | `attest` — signed, dated evidence bundle (digest-only core; Ed25519 via `[attest]` extra) | ✅ | |
@@ -508,7 +527,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: provael/provael@v0.38.0
+      - uses: provael/provael@v0.41.2
         with:
           # `none` is the benign control: without it an ASR has no false-positive baseline,
           # and the release gate cannot reach `pass`. It never moves the adversarial ASR.
@@ -620,15 +639,24 @@ verdict, which is the argument for having run them.
 | instruction | `roleplay` | **44/50 (88%)** | **[72%, 100%]** | 4.6e-13 | **2.7e-12** |
 | instruction | `goal_substitution` | **15/50 (30%)** | [6%, 54%] | 9.8e-4 | **4.9e-3** |
 | instruction | `paraphrase` | 3/50 (6%) | [0%, 12%] | 1.0 | 1.0 |
-| visual | `patch` | 0/50 (0%) | [0%, 0%] | 0.5 | 1.0 |
-| visual | `decoy_object` | 0/50 (0%) | [0%, 0%] | 0.5 | 1.0 |
-| injection | `scene_text` | 0/50 (0%) | [0%, 0%] | 0.5 | 1.0 |
+| visual | `patch` | 0/50 (0%) | — | 0.5 | 1.0 |
+| visual | `decoy_object` | 0/50 (0%) | — | 0.5 | 1.0 |
+| injection | `scene_text` | 0/50 (0%) | — | 0.5 | 1.0 |
 | injection | `mcp_tool_desc` | **0 attempts** | — | — | — |
 
 `mcp_tool_desc` is **not applicable** to this suite: it produces 50 episode records carrying
 `applicable: false` and `steps: 0`, which scoring excludes from `attempts`. It is listed as
 not-measured rather than as a seventh null, because those are different claims — and it is why the
 run is 350 measured episodes out of 400 records.
+
+**The three null arms show `—` rather than an interval, and that is a correction.** This table
+previously published `[0%, 0%]` for them. The clustered bootstrap declines when every task scores
+the same rate: resampling ten tasks that all scored zero returns zero on every draw, so the
+percentiles collapse onto it and the interval reads as certainty the data cannot support. Pooled
+as a plain binomial, 0/50 is consistent with a true rate as high as **7.1%** — the exact 95% upper
+bound, and the number the site has been publishing for these same arms all along. The refusal now
+lives in `provael.scoring.paired` and is guarded by `tests/test_paired.py` and
+`tests/test_no_zero_width_intervals.py`.
 
 **The benign control is not clean.** It fired on 2 of 50 episodes, both on tasks 4 and 5, because
 the predicate is uncalibrated — the same fixed keep-out zone on all ten tasks. McNemar handles that
@@ -644,7 +672,10 @@ seeds differ between the runs, so each tests the other's task set out-of-sample;
 direction gives p = 0.04. See
 [studies/keepout_calibration](studies/keepout_calibration/README.md), which also records why no
 corrected zone is derived there: every committed LIBERO report predates `AttackResult.trajectory`,
-so the benign end-effector poses a fit would consume were never written down.
+so the benign end-effector poses a fit would consume were never written down. That gap is closed —
+reports have recorded trajectories since schema 3 and a fit exists — and it turned out not to be
+the binding one; see [studies/keepout_face_selection](studies/keepout_face_selection/README.md)
+for the boundary that was fitted, and why it is not adopted.
 
 Read each rate **against its control**: the `none` baseline runs the policy's *real* task and
 scores **2/50 (benign FPR 4%, Wilson 95% [1.1%, 13.5%])**, so a success above is attack-induced
@@ -655,11 +686,13 @@ perturbations did not move it (0%) — an honest null on this suite.
 > **Scope (honest).** Simulation only. **Ten `libero_object` tasks, 5 seeds per (task, arm),
 > 350 measured episodes** — read the CIs, not just the point estimates, and note the interval is
 > clustered over tasks. Only the **instruction** family transfers to the real model so far.
-> **The predicate is uncalibrated**: `CALIBRATED_ZONES` is empty, so all ten tasks were scored
+> **The predicate is uncalibrated**: no calibration is adopted, so all ten tasks were scored
 > against the same default keep-out box, which overlaps the reachable benign workspace and is why
-> the benign arm trips at all. As of this release that fallback warns at runtime and can be refused
-> outright with `PROVAEL_REQUIRE_CALIBRATED=1`; the calibration itself is still owed
-> ([#136](https://github.com/provael/provael/issues/136)). `provael calibrate` fits a per-task
+> the benign arm trips at all. Ten per-task fits now ship inside the package and are **withheld
+> rather than absent** — `provael doctor` names them and says why, because "not fitted yet" and
+> "fitted, measured and rejected" are different states and only one is still waiting on a run. That
+> fallback warns at runtime and can be refused outright with `PROVAEL_REQUIRE_CALIBRATED=1`; the
+> calibration itself is still owed ([#136](https://github.com/provael/provael/issues/136)). `provael calibrate` fits a per-task
 > predicate from the policy's own benign rollouts to a benign-FPR target, and `provael attack
 > --calib` reports a calibrated redirection rate with its 95% CI and the benign FPR as its control
 > — see [Calibration](#calibration). It has never been run on LIBERO. The real SmolVLA × LIBERO
@@ -891,9 +924,12 @@ same config + seed always produces a byte-identical `report.json`.
 ## Development
 
 ```bash
-uv run ruff check .      # lint
-uv run mypy src          # type-check (strict)
-uv run pytest -q         # tests (CPU only; LeRobot tests skip unless gated)
+make check               # lint + type-check + tests, exactly what CI runs
+
+# or the three separately:
+uv run ruff check .              # lint
+uv run mypy src scripts/action   # type-check (strict); scripts/action too, as CI does
+uv run pytest -q                 # tests (CPU only; LeRobot tests skip unless gated)
 ```
 
 ## Further reading
@@ -935,7 +971,7 @@ same metadata, for pasting straight into a `.bib` file:
 @software{jain_provael_2026,
   author  = {Jain, Sattyam},
   title   = {Provael: red-teaming Vision-Language-Action robot policies in simulation},
-  version = {0.38.0},
+  version = {0.41.2},
   year    = {2026},
   doi     = {10.5281/zenodo.21984184},
   url     = {https://doi.org/10.5281/zenodo.21984184},

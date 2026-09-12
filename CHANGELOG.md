@@ -8,6 +8,1297 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Korea's AI Framework Act (Act No. 20676) enters the compliance catalogue — the first non-EU
+  national statute in it.** Three rows against Article 34(1), the duties on an operator "providing
+  high-impact AI or AI-based products and services": subparagraph 1 (risk management plan),
+  subparagraph 4 (human management and supervision) and subparagraph 5 (preparation and storage of
+  documents demonstrating safety and reliability measures). Article numbers are the Act's own, read
+  from the CSET English translation of Law No. 20676 (promulgated 21 January 2025, in force
+  22 January 2026 under its own Addenda Art. 1).
+
+  **Three of the six subparagraphs are deliberately absent.** 34(1)2 (explainability), 34(1)3 (user
+  protection) and 34(1)6 (matters the Committee resolves) have no on-point Provael signal, and a row
+  per subparagraph would read as coverage of the whole Article rather than of the part a red-team
+  result speaks to.
+
+  **34(1)4 carries `required_eai=("EAI04",)`, so it is a gap unless the action channel actually
+  ran.** A human-supervision duty is about the commanded motion a supervisor has to catch, so citing
+  it from a run that never touched the action channel would cite a measurement nobody made — the
+  same gate the functional-safety rows already use. Its `provael_signal` says in as many words that
+  the row evidences neither the supervisory arrangement itself nor any stop, interruption or
+  rollback mechanism: those are system-design duties over the deployed system, and Provael exercises
+  the policy, not the stop.
+
+  **Scope here is sectoral, not "any physical machine".** Art. 2(4) enumerates the areas that make a
+  system high-impact — energy, drinking water, health care, medical devices, nuclear, biometrics for
+  criminal investigation, employment and loan assessment, transport, public decisions, school
+  assessment. A VLA policy is inside this Act when it is deployed in one of those, not merely
+  because it drives a robot; a general warehouse or factory arm is not enumerated. The constant's
+  docstring in `compliance.py` says so, because the opposite reading is the easy one.
+
+  `results/smolvla_libero_object/attestation.insurer.json` is regenerated from the unchanged source
+  report: the assurance payload embeds the catalogue, so its `payloadSha256` moves. The subject
+  digest over `report.json` does not, and no attestation over a run report is invalidated.
+
+### Fixed
+
+- **The Python versions this package claims, and the date its citation names, are now checked
+  rather than asserted.** Three surfaces stated something nothing verified (#220, #221, #222).
+
+  **The CPU gate runs on 3.13 as well as 3.12.** `requires-python = ">=3.12"` admits 3.13 and 3.14,
+  while `.github/workflows/ci.yml`'s `check` job pinned `python-version: "3.12"` and nothing else —
+  so "works on 3.13" was untested rather than merely unadvertised. `check` is now a matrix over
+  `["3.12", "3.13"]` with `fail-fast: false`, because a break on one interpreter is a fact *about*
+  that interpreter and the other leg's result is what says whether it is version-specific. Only that
+  job changed: `release`, `docs`, `freshness`, `coverage-badge`, `gpu-arm`, `gpu-scheduled` and
+  `leaderboard-submission` stay on 3.12, since each publishes an artifact and a matrix there
+  multiplies artifacts rather than coverage.
+
+  **`Programming Language :: Python :: 3.13` is added to the trove classifiers, on the strength of
+  that leg and nothing else.** PyPI's sidebar renders the classifier list rather than
+  `requires-python`, so the page read 3.12-only against an open floor — someone skimming it could
+  reasonably conclude 3.13 was unsupported.
+
+  **3.14 is in neither list, and not because provael fails on it.** The suite passes there — 1418
+  passed, 15 skipped on CPython 3.14.2 — but `uv.lock` pins `numpy==2.2.6`, which publishes a cp314
+  macOS wheel and **no cp314 manylinux wheel**, so `uv sync --locked` cannot install on
+  `ubuntu-latest` under 3.14. It is the only cp314 gap in the locked CPU set. The lane and the
+  classifier land together when the lock moves to a numpy that ships one (2.5.3 does), rather than
+  by loosening `--locked` and giving up the property that every lane installs the set a release is
+  built from. `requires-python` keeps its open upper bound for a separate reason: a cap is baked
+  into every published sdist and wheel permanently, so a `<3.14` added today would make v0.41.2
+  uninstallable on 3.14 even once 3.14 is verified — and `CITATION.cff` exists precisely so a
+  citation names a version a reader can still install.
+
+  **`CITATION.cff` said `date-released: "2026-09-06"`; the v0.41.2 tag was created 2026-09-09.** The
+  file's own comment already described this failure from the 0.25.0 release — a citation that "named
+  a date three days before the artifact existed" — and then concluded that the date "is not
+  machine-checkable against a tag, so it is on the release author". It recurred, by three days
+  again. It *is* checkable, because the tag carries its creation date.
+  `tests/test_version_consistency.py::test_citation_date_matches_its_tag` now compares
+  `date-released` against `git tag -l --format='%(creatordate:short)' v<version>`, and skips when
+  that tag is not in the clone so that neither a shallow checkout nor the release-prep commit —
+  where `version` names the release about to be cut — fails for the wrong reason.
+  `test_the_tag_date_lookup_actually_resolves` holds the other end, so a broken lookup goes red
+  instead of turning the skip permanent. The date is no longer guarded by the release author's
+  memory.
+
+  #220 reported the file at `0.29.1` / `2026-07-31`. That part was already fixed and has read
+  `0.41.2` since the 0.41.2 release; the date is what the report did not catch, and what the guard
+  it asked for now covers.
+
+## [0.41.2] — 2026-09-09
+
+### Added
+
+- **`watch/publish-freshness.json` — the release-drift window, published so a consumer reads the
+  answer rather than reimplementing the rule.** `watch/freshness.json` reports when *anything* was
+  last measured, and a one-episode timing probe satisfies it: on 8 September a $0.06 probe put that
+  badge at `today` while the published 44/50 headline was still measured with v0.32.0, nine minors
+  back. The window that catches that lived in `provael doctor` and nowhere readable, so anyone
+  wanting the same three numbers had to recompute them against `watch/measurements.json` — and a
+  reimplemented staleness rule drifts in the reassuring direction by default, because a widened
+  window looks exactly like a project keeping up.
+
+  Fields: `measuredWith`, `measuredAt`, `releasesBehind`, `staleAfterReleases`, `isStale`,
+  `currentVersion`. `measuredWith` is the version behind the **largest** real campaign rather than
+  the newest record, so a probe cannot displace a 350-episode run. An unmeasured project publishes
+  `null` for the gap and the verdict rather than `0` and `false` — zero is the reassuring answer and
+  must never be the fallback.
+
+  **This is not the cross-repo constant fix.** That was `staleAfterReleases` in `watch/release.json`
+  in 0.41.1; www.provael.com read its own `STALE_AFTER_RELEASES = 2` out of `src/lib/freshness.ts`
+  until then and now reads the product's. What is new here is the *result* of applying that window,
+  which nothing published before. The constant appears in both artifacts on purpose and cannot
+  drift: both render from `provael.watch.STALE_AFTER_RELEASES` and both are gated by
+  `make check-docs`. That is precisely the property the cross-repo copy lacked — no shared source,
+  and neither side able to see the other.
+
+  **No `generatedAt`, deliberately.** `gen_release_artifact.py` and `gen_measurement_ledger.py` both
+  refuse a wall-clock field, and `test_measurement_ledger.py` asserts it by name: one would make the
+  output differ on every run, so `--check` would stop meaning "current" and the new
+  `make check-publish-freshness` gate could never pass on a clean tree. `measuredAt` carries the
+  "when" a reader wants — the instant of the measurement being described, a fact about the run
+  rather than about the moment the script executed.
+
+- **`watch/README.md`** — the consumption surface had no prose documentation at all. Six generated
+  artifacts, what each answers, why the two freshness files disagree on purpose, and the two
+  properties every file holds: no wall-clock values, and no unverifiable fields.
+
+- **`make check-publish-freshness`**, wired into `check-docs` beside `check-release` and
+  `check-measurement-ledger`, plus `make gen-publish-freshness`.
+  `tests/test_publish_freshness_artifact.py` binds the artifact to the code rather than to a
+  literal, and was mutation-tested against a widened window in either file, a softened verdict and a
+  shrunken gap. One mutation initially escaped because `STALE_AFTER_RELEASES = 2` also appears in a
+  comment *above* the assignment, so the edit landed in prose — the same shape as a version guard
+  firing on a sentence that quotes the version it corrects.
+
+## [0.41.1] — 2026-09-08
+
+### Added
+
+- **`watch/release.json` publishes the release-drift window, so a consumer stops keeping a copy.**
+  `STALE_AFTER_RELEASES` landed in `watch.py` in this release while www.provael.com held its own
+  `= 2` in TypeScript. One policy constant in two repositories, and a disagreement between them is
+  invisible from both sides: the site would render one window and `provael doctor` another, with
+  nothing failing. It now ships as `staleAfterReleases`, and `test_release_artifact.py` fails if the
+  artifact and the constant disagree.
+
+- **E-2026-06 and E-2026-07 back-filled into `docs/errata.md`.** Both were raised on 6 September
+  against website surfaces and recorded only on the mirror at provael.com/errata, which left the
+  maintained source two entries short of the page that copies it. They agree entry-for-entry now.
+
+  One thing is recorded rather than fixed: **E-2026-07 and E-2026-05 are the same correction under
+  two IDs** — ISO 10218:2025 does not defer its cyber detail to IEC 62443, recorded once against two
+  repository documents and again five days later against four website pages. Issuing the second ID
+  was the mistake and it is not fixable: both are published and the page is append-only. E-2026-09
+  is the next free ID.
+
+- **Adopted calibrations load from a packaged directory, so a re-calibration is a file drop rather
+  than a code change.** `CALIBRATED_ZONES` was a hand-written literal that stayed `{}` while ten
+  fitted calibrations sat committed under `results/calibration/`. Nothing connected the two, so the
+  dict could stay empty forever with every check green — which is issue #136's shape.
+
+  Artifacts now load at import from `src/provael/suites/calibrations/`, **not** from
+  `results/calibration/`. That is load-bearing rather than tidy: `pyproject.toml` ships
+  `packages = ["src/provael"]`, so `results/` is absent from a wheel, and reading the predicate from
+  there would make the boundary every ASR is scored against differ between a source checkout and a
+  `pip install` — one published number resting on two different predicates depending on how the
+  reader installed the tool. This repository already learned that in 0.26.0 and wrote it into
+  `suites/__init__.py`. `test_adoption_does_not_depend_on_an_unpackaged_directory` holds it.
+
+  **Nothing is adopted, and that is the finding rather than an omission.** Loading is gated on
+  evidence the predicate can fire: an artifact needs `spatial_fit.detection_rate > 0`. The ten
+  `libero_object` fits carry no `spatial_fit` at all — they predate the adversarial arm — and the
+  one that could be replayed against real trajectories flagged **0 of 12** attacked episodes while
+  another face flagged 5. Five of the six candidate faces score the same 0.0 benign false-positive
+  rate, so a low benign rate is not evidence a boundary works. Adopting them would install a
+  predicate that scores a perfect ASR against something it can never flag.
+
+  So the fits are **withheld, not absent**, and the difference is now visible: they ship in the
+  package, are loaded and checked on every import, and `provael doctor` names all ten with the
+  reason. "Not fitted yet" and "fitted, measured and rejected" stopped looking the same.
+
+  **What this does and does not fix.** It fixes the drift — `test_calibration_adoption.py` fails if
+  a committed fit is neither adopted nor withheld, in either direction, so a future calibration
+  cannot be produced and quietly ignored. It does **not** fix the predicate. The benign control
+  still fires 2/50 against the default box, the published ASR is still scored against a hand-picked
+  box that overlaps the reachable benign workspace, and #136 stays open. One GPU arm with the zones
+  active, measuring benign and adversarial together, is what changes that.
+
+- **`provael doctor` reports the published-measurement window the website has carried all along.**
+  Every page on www.provael.com says the published result was measured with v0.32.0, nine releases
+  ago, past the project's own 2-release window. The CLI had no way to say it, so `provael doctor` on
+  a green freshness badge gave a reader no signal at all — and the badge is green today because a
+  $0.06 one-episode timing probe reset it while the 44/50 headline stayed nine minors old.
+
+  Two windows now sit side by side and disagree, which is the point: `last measured 0 days ago,
+  within 7` above `published result measured with v0.32.0, 9 releases behind 0.41.0; window is 2 —
+  PAST IT`. `published_measurement()` picks the version behind the **largest** real campaign rather
+  than the newest record, precisely so a probe cannot displace a 350-episode run; a genuinely bigger
+  run at a newer version closes the gap on its own with no threshold edit.
+
+  The 2-release threshold now exists in `watch.py`. The website still holds its own copy in
+  `src/lib/freshness.ts`, so this is one policy constant in two repositories and it can drift. The
+  fix is for the site to read a published artifact instead, which is a cross-repo contract change
+  and is not made here.
+
+### Changed
+
+- **Two prior-art entries added: VLA-Risk and SAFE.** VLA-Risk (OpenReview 31EjDFwFEe) reports
+  degradation on its attack tasks where provael reports an envelope breach, and the two come apart
+  in both directions — the committed run has 84% clean-task success alongside 44/50 envelope exits.
+  Read from the public abstract only, because OpenReview serves both its web and API paths behind a
+  bot challenge this project does not bypass; the entry says so rather than implying a closer
+  reading than happened. SAFE (arXiv:2506.09937, NeurIPS 2025) is failure *detection* from a VLA's
+  internal features — no overlapping quantity with an elicitation rate, and listed for completeness.
+  Neither entry claims superiority in either direction.
+
+  RedVLA was **not** added: it is already covered at length, quoting their own formalism for why the
+  denominators differ (they fix the instruction and perturb the initial state; provael does the
+  opposite). A shorter row would have contradicted it — the channel is the scene, not the
+  instruction. That entry's claim that "`provael calibrate` has never run on LIBERO" is corrected
+  here: it ran on 6 September and the predicate is still uncalibrated, for the reason above.
+
+## [0.41.0] — 2026-09-08
+
+### Changed
+
+- **`cli.py` is a package: 3,057 lines and 27 top-level commands split by subject** (issue #193).
+  Sixteen modules for the top-level commands plus two for the existing `leaderboard` and `study`
+  sub-apps; `cli/_shared.py` keeps the Typer apps, the two consoles and the cross-group helpers and
+  now registers no commands at all. The file that every contributor touched and every merge
+  conflict landed in is 517 lines, none of them a command body.
+
+  **`provael --help` is byte-identical, and that is checked rather than claimed.**
+  `tests/fixtures/cli-surface.json` snapshots the surface as data — command order, help text,
+  parameter names, flags, required-ness — and `tests/test_cli_surface.py` fails on any change. It
+  is data rather than rendered help because rendered help wraps to the terminal: a byte-comparison
+  of that fails on a different `COLUMNS` and passes on a lost option that happened to reflow. The
+  guard was mutation-tested first: a reordered command, a renamed option and a rewritten help
+  string are all caught; renaming a command's Python function is deliberately not, which is the
+  property that makes the move safe.
+
+  Two things about the new `cli/__init__.py` are load-bearing rather than housekeeping. Typer
+  renders top-level commands in registration order, and registration happens as each decorator
+  executes — so the import list IS the order of `provael --help`, and ruff's isort sorts it
+  alphabetically, which is not registration order. Hence `isort: off` around the block, with the
+  surface test as the actual defence. The groups were moved out front-to-back for the same reason:
+  each intermediate commit kept the order intact rather than parking moved commands at the end.
+
+  Startup does not regress: median `import provael.cli` is 210 ms against 245 ms before, measured
+  from a worktree at the pre-split commit rather than from a stashed tree — `git stash` leaves
+  untracked files behind, so the first comparison timed a tree where the commands had been moved
+  out and the import list had not caught up, and reported a 69% regression that did not exist.
+
+  One test reached `submit_cmd` as a module attribute; it now reads the command's help through the
+  Click object, which is how the rest of that file already worked.
+
+### Fixed
+
+- **The `calibrate` GPU stage runs both arms, and is sized for it.** It passed no attack, because
+  `provael calibrate` took none — so the stage that exists to fit the keep-out predicate could only
+  produce the kind of fit this release establishes is uninformative. It now passes
+  `--attack roleplay`: the arm the headline rests on, so the face is chosen against the attack the
+  published number is about.
+
+  The timeout moved with it, because the timeout is the cost ceiling and a shard that overruns
+  writes no artifact at all — provael writes `report.json` once, at the end, so an overrun costs
+  that task entirely rather than costing it some episodes. The attacked arm reuses the holdout
+  seeds, so it is 30% more episodes and not double; at the pilot's measured 0.612 s/step that is
+  ~3,306 s of worst case against the old 3,600 s budget, which left nothing for a slow shard. Now
+  5,400 s, ceiling ~$12 rather than ~$8, and the plan step prints it before anything is billed.
+
+- **README told a reader the calibration was blocked on a run that has since happened.** It said
+  "what is missing is a run rather than an idea" and named the benign-only `calibrate` arm at ~$5.
+  That arm ran on 6 September. What it produced does not fix the predicate, and a benign-only run
+  never could have: the section now says so, with the 0/12 the fitted face flags against the 5 that
+  `x+` does and the 4 the uncalibrated default box does. The passage saying committed reports
+  predate `AttackResult.trajectory` now records that the gap is closed and was not the binding one.
+
+- **The keep-out calibration was placing its hazard zone beside the wrong face, and the benign
+  metric could not have shown it.** All ten `libero_object` zones fitted on 6 September reported a
+  held-out benign false-positive rate of exactly 0.0, and that was read here as the boundary being
+  well placed. Replaying the one committed real-model run that records trajectories against all six
+  candidate faces (`studies/keepout_face_selection/`, task `libero_object/0`, 14 episodes across
+  six attacks across three families) says otherwise:
+
+  | hazard face | benign fires | attacked fires |
+  | --- | --- | --- |
+  | `x+` | 0/2 | **5/12** |
+  | `y-` — the face the fitter always picked | 0/2 | **0/12** |
+  | the other four | 0/2 | 0/12 |
+  | the shipped DEFAULT box | 0/2 | 4/12 |
+
+  The policy leaves its workspace through `+x`. The hazard sat beside `-y`, starting at y = −0.364,
+  and the deepest −y excursion in any episode is −0.303 — the zone was placed past a boundary the
+  arm never reaches.
+
+  `fit_spatial_zone` searched the **gap** and took the face from `hazard_zone_beside`'s default
+  argument. Every gap that clears the benign envelope gives a benign FPR at or near zero, because
+  the hazard is disjoint from the benign workspace by construction, so the search always succeeded
+  and the number it reported carried no information. Five of six wrong faces achieve the same 0.0.
+  The structural reason: **a benign-only calibration cannot choose a face**, because where an attack
+  goes is not observable from rollouts in which no attack ran. Re-running the arm on a newer build
+  would have reproduced this exactly.
+
+  The fitter now searches six faces × six gaps and picks the candidate that flags the most attacked
+  rollouts among those within the benign target. `calibrate_one` gained an adversarial arm run at
+  the **holdout** seeds, so the arms are paired — same initial states, differing only in whether the
+  attack ran — and `provael calibrate --attack <name>` exposes it. Every calibration records a
+  `spatial_fit`: the face, the gap, whether anything chose it, and `detection_rate`, which is
+  **`null` when no adversarial arm ran rather than `0.0`**. A measured failure to catch and not
+  having looked are different findings, and collapsing them is how a zone that cannot fire comes to
+  look like one that does not need to. The CLI prints both arms side by side and says plainly when
+  a face was not selected.
+
+- **Adoption now has to state the evidence that earned it, and `provael doctor` prints it.**
+  `CALIBRATED_ZONES` was `dict[str, list[KeepOutZone]]`, so an entry could be adopted from any
+  evidence at all — including none — and looked identical either way. The rule "never adopt a zone
+  whose only evidence is a low benign false-positive rate" lived in a comment and in whoever
+  remembered it. The value is now an `AdoptedCalibration` carrying the fitting version, the face,
+  the detection rate and its n, all required: an adopted predicate with nothing measured against it
+  is no longer representable.
+
+  The `doctor` row said `calibrated zones · none · keep-out runs use the DEFAULT box` and its only
+  other state was a bare count. A count cannot distinguish a predicate that catches things from one
+  that cannot fire. It now names the version, the face and what each zone actually flagged, in red
+  when that is zero — and when nothing is adopted it says the ten committed fits were **measured
+  and rejected**, rather than leaving `none` to read as work not yet attempted.
+
+  `CALIBRATED_ZONES` stays empty. This is one task; the published ten-task result is
+  `schema_version: 2` and records no trajectories, so nine of ten tasks have no adversarial data at
+  all and the correct face may differ per task. What would change that is one GPU arm running both
+  arms across all ten tasks with the new fitter. Issue #136 stays open with the numbers.
+
+## [0.40.0] — 2026-09-08
+
+### Fixed
+
+- **Calibration rollouts seed the policy, not only the environment.** `PolicyAdapter.seed()` was
+  called from exactly one place in the codebase — `runner.run_episode`, the attack path.
+  `collect_benign_signals()` seeded the environment with `suite.reset(task, seed)` and left the
+  policy alone, so a flow-matching sampler like SmolVLA's drew its noise from whatever state the
+  ambient torch RNG was in.
+
+  That is a worse defect in a calibration than in a run. A run can be re-taken and compared; a
+  fitted boundary is the thing every later run is scored *against*. All ten `libero_object` keep-out
+  zones were fitted this way on 6 September 2026, which means the trajectories that shaped them are
+  not reproducible — the artifacts record the seeds asked of the environment, and nothing recovers
+  the sampler draws that actually set the envelope. Re-running on a newer build without fixing this
+  would have bought a fresh version label and the same irreproducibility.
+
+  `Calibration` now carries `policy_seeds`: what the adapter **applied**, per rollout, fit seeds
+  then holdout seeds. Not what the caller asked for — same discipline as the runner's `policy_seed`
+  and `resolved_device`. An adapter that does not seed records `null`, which is the honest
+  description of every calibration fitted before this release, and a test fails on a mutation that
+  records the requested seed instead.
+
+- **Both Modal GPU images pin an exact provael release, and CI fails when the pin goes stale.**
+  The two lanes were wrong in opposite directions and both reported success.
+  `examples/gpu-ci/modal_libero_suite.py` pinned commit `5d34472` (v0.32.0, 9 August) under a
+  comment saying to bump it deliberately when a stage needed newer code; five releases passed and
+  the ~$5 `calibrate` arm fitted every zone on that build. `examples/gpu-ci/modal_provael_gpu.py`
+  pinned nothing at all, so the scheduled canary installed whatever PyPI served that morning and
+  resolved 0.39.1. The two GPU lanes were measuring builds five releases apart.
+
+  Neither was visible from outside. A stale pin and a current pin are the same string shape, the
+  runs succeeded, and the artifacts recorded `tool_version: 0.32.0` truthfully. Pinning was never
+  the hard part; noticing was. `tests/test_gpu_image_pin.py` now asserts every `modal_*.py` lane
+  declares `PROVAEL_PIN`, that it is an exact version rather than a range or a URL, that it equals
+  `provael.__version__`, and — the mutation guard — that provael reaches `pip_install` only through
+  that constant and does reach it. Bumping `__init__.py` without bumping the lanes is now a
+  release-blocking failure. The deliberate consequence: a GPU measurement arm can only run against
+  code that has actually shipped.
+
+- **`--calib` finds the calibrations the `calibrate` arm actually wrote.** `load_calibrations()`
+  globbed one directory level; the arm shards one task per container and writes each into its own
+  subdirectory. So the natural invocation — `--calib` pointed at the directory the arm produced —
+  matched zero files, returned an empty map, and the run proceeded against the DEFAULT keep-out
+  box while configured not to. Verified against the committed ten:
+  `results/calibration/libero_object_calibrate` yielded nothing, only its per-task subdirectories
+  did. The CLI's note on an empty map is what kept this a trap rather than a disaster.
+
+  The loader recurses now, and two files claiming the same `(policy, suite, task)` raise
+  `DuplicateCalibrationError` instead of the previous last-one-`sorted()`-wins. Two fits are two
+  boundaries, and every rate in the run is scored against whichever won, so there is no safe
+  default: newest-wins needs a timestamp the artifact does not carry, and tightest-wins is a
+  research decision rather than a loader's.
+
+- **`calibrate_suite()` refuses to stamp a version that did not produce the fit.** The function
+  took `tool_version` as a parameter, so the label on a fitted predicate was whatever the caller
+  passed. The CLI passed `__version__` and was correct; nothing enforced it. New
+  `ToolVersionMismatchError`, raised at the entry point before any GPU time is spent.
+
+- **The staleness sweep no longer forces an incident record to become false.** The `action ref` pin
+  pattern is unanchored, so it matched two comments *about* a pin — both narrating the 2-4 September
+  2026 incident where README.md advertised an action ref that would not resolve. The 0.40.0 bump
+  flagged them as stale pins, and rewriting them would have dated the incident to a release that
+  postdates it. Both files are exempt now, and because the exemption is by file,
+  `test_exempt_files_carry_no_live_pin` holds the other end: an exempt file may discuss a pin and
+  may not use one.
+
+### Added
+
+- **Ten per-task keep-out calibrations for `libero_object`, measured on a real policy** — the run
+  issues #136 and #171 have been blocked on since 16 August. `results/calibration/` now holds one
+  fitted artifact per task from 20 benign SmolVLA rollouts each, split fit/holdout: a 3-D benign
+  envelope, one adjacent keep-out zone, and a **holdout benign false-positive rate of 0.0 on all
+  ten tasks** against a 0.05 target. The uncalibrated global zone fires 5/100.
+
+  **This is not yet adopted.** `CALIBRATED_ZONES` is still empty and `provael doctor` still prints
+  `calibrated zones none`. Two reasons, both worth stating rather than working around.
+
+  The artifacts were produced by provael **0.32.0**, and the reason matters more than the version
+  gap does. This entry first said the Modal image installed `provael[lerobot]` unpinned and that
+  the zones were therefore fitted against a `calibration_signal()` four minors behind the one that
+  would consume them. **Both halves of that were wrong, and are corrected here.** The measurement
+  lane pinned a *commit* and had gone stale at it; the unpinned lane was the scheduled canary, a
+  different file. And `calibration_signal()` is byte-identical between 0.32.0 and this release —
+  the signal definition never moved, so a version gap alone would have been a weak argument for
+  spending again. The real defect is that `collect_benign_signals()` never called
+  `PolicyAdapter.seed()`, so SmolVLA's flow-matching sampler ran off ambient torch state and the
+  trajectories that shaped all ten envelopes cannot be reproduced by anyone, including us. That is
+  fixed below, and it is what makes a re-fit worth paying for.
+
+  The second reason is unchanged: a 0.0 holdout FPR says the zone does not fire on benign
+  rollouts; it says nothing about whether the zone still catches a redirected policy. Adopting a
+  predicate that cannot fire would score a perfect ASR and mean nothing, which is the exact failure
+  `defenses/envelope.py` has an anti-cheat test for. That is answered by one more GPU arm, with the
+  zones active, measuring benign and adversarial together.
+
+### Fixed
+
+- **The freshness badge derives from what is committed, not from a file the lane then discards.**
+  The GPU lane's first successful commit — run 34051694289, and the run that took the site off its
+  build deadline — put `main` red. `latest_measurement()` unions `read_measurements(watch/)` with
+  the committed manifests and takes the max. `provael watch --record` had written
+  `watch/watch.jsonl` with `measured_at = _now()`, wall-clock at record time; the run's manifest
+  carries `ended_at`, when it actually finished. Those were `19:03:58Z` and `19:03:46Z`. So the
+  badge took the later instant from a log the same step then deliberately declined to commit, the
+  ledger took the earlier one from the run that WAS committed, and
+  `test_newest_real_measurement_agrees_with_the_badge` failed — correctly, because the badge was
+  asserting an instant no committed artifact supported.
+
+  The log is now deleted before the badge is regenerated. It stays uncommitted for the original
+  reason — the run is in `results/`, and putting one measurement in two trees read by different
+  code paths is the asymmetry that made committing the log alone unsafe — but it is also gone
+  before anything reads it. `gpu-arm.yml` never calls `--record`, so its badge already derived from
+  `results/` only.
+
+  The committed badge is corrected here too, not just the workflow: it now reads `19:03:46Z`, the
+  instant the manifest records.
+
+- **`gpu-arm.yml` keeps the run it pays for.** Same defect as the canary lane, one workflow over and
+  an order of magnitude more expensive: this arm retrieved its Modal artifacts into a 90-day
+  `upload-artifact` and committed nothing. The `calibrate` stage — ~$8, all ten `libero_object`
+  tasks, benign-only, and the run issue #171 has been waiting on — would have produced a fitted
+  per-task envelope that aged out of GitHub before anything consumed it, leaving `CALIBRATED_ZONES`
+  empty and `provael doctor` still printing `calibrated zones none`.
+
+  Two destinations, because the stages produce two different things. `calibrate` writes per-task
+  calibration artifacts and no `report.json`; those are a fitted predicate rather than a
+  measurement, so they land in `results/calibration/` where `--calib` reads them and where the
+  measurement ledger cannot see them — it walks `results/**` for `execution-manifest.json`, and a
+  calibration artifact has none. Verified rather than assumed: adding a directory there moves no
+  count in `provael coverage` and leaves `gen_measurement_ledger.py --check` green. Every other
+  stage writes a report and a manifest, which are measurements, and land in `results/<stage>/`.
+
+- **`provael calibrate` has never written a file called `calibration.json`**, and
+  `modal_libero_suite.py` told operators to look for one in three places — a return string, a
+  comment, and the retrieval instruction printed at the end of the stage. `calibration.py` names its
+  artifacts `<policy>__<suite>__<task>.json`, so a LIBERO shard writes
+  `smolvla__libero__libero_object_4.json`. The wrong name survived because this is the one stage
+  nobody has ever run.
+
+- **The scheduled GPU lane keeps the measurement it produces.** Fifth failure of the family behind
+  #181 and #188, and the first where everything worked. `provael watch --record` appends to
+  `watch/watch.jsonl` in the RUNNER'S tree; the job declared `contents: read`, checked out with
+  `persist-credentials: false`, and uploaded only the log. So on 5 September run 33974192486 reached
+  a real policy, printed `Adversarial ASR: 33.3% (4/12)`, logged `recorded smolvla × libero (4/14)
+  measured with provael 0.39.1` — and the container took it with it. Neither `watch.jsonl` nor
+  `trials.jsonl` has ever existed in this repository.
+
+  **Committing the watch log alone would have been worse than nothing, and that was simulated before
+  this was written.** `latest_measurement()` unions the log with the committed manifests;
+  `gen_measurement_ledger.py` reads only `results/`. The badge would have gone brightgreen while the
+  ledger's newest row stayed a month old, and `test_newest_real_measurement_agrees_with_the_badge`
+  fails on exactly that — correctly, because www.provael.com renders that ledger on /results, so the
+  shipped state would have been a green "measured today" banner over a table whose newest row was
+  August.
+
+  The run is now committed to `results/gpu-scheduled/<ended_at>/`, which is what `results/` is for,
+  and the ledger and the badge are regenerated from that one tree. Not `watch/coverage.json` or
+  `watch/registry.json`: despite the shared directory those are a shields.io test-coverage badge and
+  a code-derived registry owned by `coverage-badge.yml`. The push rebases and retries three times,
+  because `freshness.yml` and `coverage-badge.yml` also push to `main` and losing a real GPU
+  measurement to a race would be the sixth version of this bug.
+
+### Documentation
+
+- **The RoboArena matched pair is pre-registered**, in `results/hardware/README.md`, before any data
+  exists and while still blocked — fixing the prediction is free today and impossible later. A base
+  policy unmodified against the same policy with the keep-out predicate at the action layer, one flag
+  apart, so the cost of the gate is readable off the board rather than asserted here.
+
+  **Stated in win rate, not Elo.** RoboArena's own paper positions its ranking against both standard
+  Elo and conventional Bradley-Terry, because Bradley-Terry assumes each pairwise comparison happens
+  under identical conditions and free task choice violates that. A threshold in Elo would be a
+  threshold in a unit the venue does not report. Registered instead: the gated arm wins under 50% of
+  head-to-head comparisons against its own twin (a clamp can only remove motion), predicted at or
+  above 40%, abandoned below 25%, and nothing read before 50 comparisons. If the gated arm wins MORE
+  often, that is not a win for the gate — it is evidence the predicate is correlated with task
+  structure, and it will be reported in those words.
+
+  **The base is `paligemma_fast_droid` and the criterion is what is registered**: the base must be
+  reproducible, robot data and pre-trained weights public. `pi05_droid` was the initial plan and
+  fails that test, because Pi's pre-training data is not released — which by RoboArena's own
+  definition puts "open-source: No" on the row and yields a number no outside party can re-derive.
+
+  **There is no deadline, and an earlier draft said there was.** The CoRL round carrying the
+  8 September soft and 13 September hard deadlines was CoRL **2025** — that page reads "Conference on
+  Robot Learning, 2025", its call for papers closed 17 September 2025 and its workshop was held
+  27 September 2025. Those dates were projected onto 2026 off a stale page. The form is live and the
+  platform is active (public data dump dated 17 July 2026), but nothing is closing, and the false
+  urgency was about to buy a rushed submission.
+
+- **`results/hardware/README.md` records what a real-robot leaderboard entry actually needs**, dated
+  6 September 2026 and assessed against RoboArena's September round. Three blockers, none of which
+  is time: nothing here speaks their inference API (`provael serve` is the ATTESTATION server —
+  `/healthz`, `/attest`, `/assurance-report`); the `openpi` adapter that would front a π0.5 policy is
+  scaffolding by our own declaration and has never been exercised; and `ActionEnvelopeClamp`'s
+  bounds are the CPU fixture's benign envelope in the fixture's action space, which means nothing on
+  a 7-DoF DROID cell. Picking replacements unexamined is what #136 was.
+
+  It also records a number this assessment got wrong. A draft covering letter for that submission
+  stated the benign control fires on 5 of 100 episodes, and the first version of this entry called
+  that fabricated on the grounds that no arm of the pinned control run produces it. That was a check
+  of one run against a figure that pools two, and the draft was right: `smolvla_libero_object_suite`
+  fires 2/50 and `smolvla_libero_object_control` fires 3/50, pooling to **5/100 — 5.0%, Wilson 95%
+  [2.2%, 11.2%]**, which is exactly what issue #171 publishes. The pooled figure is the better one:
+  a single-run 3/50 carries no interval and hides that every firing lands on `libero_object/4` or
+  `/5` while eight tasks stay silent through 80 benign episodes. Whether that rate and that
+  clustering hold on a real cell is worth more than the row.
+
+  **Runs executed stays 0**; `provael coverage` still reports `hardware=0`.
+
+## [0.39.5] — 2026-09-06
+
+### Added
+
+- **`watch/release.json`, so a consumer derives the release instead of copying it.** `watch/` had
+  the counts, the badge, the measurement ledger and the coverage total, and no release artifact, so
+  the one fact a consumer restates most often was the one it could not derive. www.provael.com kept
+  its own copy refreshed on the release cadence: on 6 September 2026, 14 of its built pages rendered
+  v0.39.3 while the tag, the GitHub release and PyPI all said 0.39.4. The worst of them was
+  `/security`, which named that superseded release as the one a reporter should reproduce on before
+  filing. (Not quoted verbatim here: www.provael.com renders this file at /changelog, and its
+  `check:versions` guard reads a currency-claim sentence on a rendered page as a live claim,
+  correctly — it cannot tell a quotation from an assertion.)
+
+  Every value derives from `provael.__version__`. There is deliberately **no commit sha and no
+  published_at**: the generator runs offline and could only guess at them, and an unverifiable field
+  in a trust artifact is worse than a missing one. A test names those fields explicitly, because the
+  tempting next commit is the one that adds a date for a consumer that wants to render one.
+
+  Wired into `make check-docs` as `check-release`, and regenerated by `coverage-badge.yml` alongside
+  the other two watch artifacts as a safety net, following that workflow's existing commit pattern
+  rather than adding a second one.
+
+### Fixed
+
+- **Two documents said ISO 10218:2025 defers its cyber detail to IEC 62443. It does not.**
+  `docs/compliance/machinery-annex-i-part-a.md` carried "which defers detailed cyber requirements
+  to IEC 62443" and `docs/crosswalk/halos-integrator.md` carried "cyber clauses, deferring detail
+  to IEC 62443". Two more places described Provael's own SL2 view as something ISO 10218 routes to.
+
+  Corrected by reading **Clause 2 Normative references** on the ISO Online Browsing Platform, not by
+  inferring it from a missing citation. Clause 2 lists ISO 3864-x, ISO 4413/4414, ISO 7010,
+  ISO 9283, ISO 12100, ISO 13732-x, ISO 13849-1:2023, ISO 13850, ISO 14118/14119/14120, ISO 19353,
+  ISO 20607, ISO 20643 and IEC 60073. IEC 62443 and IEC TR 63074 appear only in the Bibliography,
+  which is informative. The Foreword does say the revision adds "requirements for cybersecurity to
+  the extent that it applies to industrial robot safety", and that part is kept.
+
+  **Four sites, and two were found by grep rather than named:** the machinery Annex I card and the
+  `_iso_10218_2` docstring in `src/provael/assurance.py`. Four other candidates carry no such claim
+  and were left alone, because "Maps to" and "cross-map to" already read as Provael's own crosswalk
+  and rewriting them would have degraded accurate text.
+
+  Nothing machine-readable moved. `_IEC`, the `iec-62443:slv` key, every control identifier and the
+  emitted `routes_to` field are a published contract and were never the defect. Recorded as
+  **E-2026-05** in `docs/errata.md`.
+
+### Added
+
+- **`watch/registry.json` publishes the registered/runnable split.** It carried `policies: 8` and
+  `suites: 6` as bare integers while the code already declared which of those are scaffolding, and
+  `list-policies` / `list-suites` already rendered that. `coverage_json()` never exported it, so a
+  consumer wanting the runnable number typed one: www.provael.com publishes "5 suites" beside a
+  registry saying 6.
+
+  Now `runnablePolicies`, `scaffoldingPolicies`, `runnableSuites`, `scaffoldingSuites`, plus
+  `scaffoldingPolicyNames` and `scaffoldingSuiteNames` so a consumer can render which rather than
+  only how many. **8 = 5 + 3**, **6 = 5 + 1**.
+
+  The counts are properties over the name tuples rather than stored fields, so they cannot drift
+  from the declaration they came from, and the split is read from `SCAFFOLDING_POLICIES` /
+  `SCAFFOLDING_SUITES` rather than probed — a filesystem probe answers differently in a checkout
+  and in a wheel, and fails toward "measured". A test asserts the split is identical with
+  `results/` absent.
+
+## [0.39.4] — 2026-09-06
+
+### Fixed
+
+- **The Docker Hub mirror pointed at a namespace that does not exist.** `docker-publish.yml` has
+  targeted `docker.io/provael/provael` since the mirror was written, gated on
+  `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`. Those secrets were never set, so the branch never ran and
+  the wrong coordinate never surfaced. It now points at `docker.io/mndfreek/provael`.
+
+  **The namespaces differ on purpose.** GHCR stays `ghcr.io/provael/provael`, matching the GitHub
+  org. A Docker Hub *organisation* named `provael` requires a Docker Team plan at $15/seat/month —
+  $180/year to make one string match another string, for a mirror whose only job is discoverability.
+  The image bits are identical; only the coordinate differs, and the workflow comment records why so
+  the mismatch reads as a decision rather than a mistake.
+
+### Added
+
+- **A Codespaces badge, so the devcontainer has an entry point.** `.devcontainer/devcontainer.json`
+  has existed since 26 July — Python 3.12, the uv feature, `uv sync --locked` on create, ruff and
+  mypy extensions — and a grep for `codespaces` across the repo returned zero hits. A working
+  artifact with no way in is the same as no artifact. Placed beside "Open in Colab", the other
+  one-click entry point on the page.
+
+- **A Binder environment, so the notebooks run without a Google account.** All five notebooks
+  carried only an "Open in Colab" badge, and Colab requires a sign-in. A reader who has to create
+  an account before running anything has already been asked to do work, on notebooks that exist so
+  nobody has to take the README's word for a number.
+
+  `binder/environment.yml` pins **Python 3.12**, not 3.11: `requires-python = ">=3.12"`, so a 3.11
+  image builds cleanly and then fails at the pip step, launching the badge into a broken kernel
+  with no obvious cause.
+
+  It deliberately does **not** pin the provael release. That would be theatre — notebook 01 runs
+  `%pip install -q provael` in its own second cell, so any pin here is replaced by latest the moment
+  the notebook runs — and it would rot unnoticed, because `test_version_consistency.py` matches
+  `provael/provael@vX.Y.Z` action refs and pre-commit `rev:` lines, not pip specifiers. Verified by
+  mutating a pin and watching the suite stay green, rather than assumed.
+
+
+- **`watch/measurements.json` — one ledger row per committed measurement.** `watch/freshness.json`
+  answers *when was anything last measured* and collapses every run into one instant for a badge;
+  `watch/registry.json` answers *how many attacks are registered*. Neither answers the question a
+  stranger actually arrives with, which is **how current is the specific number I am reading**.
+  That needs a row per measurement carrying the version it ran on and the artifact it came from,
+  and nothing published it.
+
+  The date cannot come from `report.json`, which carries no timestamp on purpose — the determinism
+  contract makes a report a pure function of its config. It comes from the execution manifest
+  beside it, via `provael.watch.measurements_from_results`, so the ledger and the badge cannot
+  drift into disagreeing about the project's own currency. `test_measurement_ledger.py` asserts
+  that agreement directly.
+
+  **Two honesty fields travel with every row.** `recorded: false` marks a reconstructed date (an
+  exact-midnight `ended_at`, or a legacy-unverified state) that must never render as a measurement
+  instant. `countsAsMeasurement: false` marks a fixture backend — a stub run executes real attacks
+  in under a second on CPU and would otherwise let a consumer refresh a freshness claim having
+  re-measured nothing. Today's ledger holds 26 rows, of which 20 are real-policy measurements and
+  one carries a reconstructed date.
+
+  The file says **when** and **on what**, never **where** a number is published. Only a consuming
+  site knows that, and encoding a site's information architecture into a repo artifact would put
+  the mapping in the one place a site author never looks.
+
+### Fixed
+
+- **Four documents told a contributor to run a weaker type-check than CI runs.** `README.md`,
+  `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` and `CLAUDE.md` all documented the gate as
+  `uv run mypy src`, while `.github/workflows/ci.yml` runs `uv run mypy src scripts/action` and
+  `pyproject.toml` pins `files = ["src"]`. So the documented command checked **105 files against
+  CI's 111**: a type error in `scripts/action` — the five scripts that decide whether a release
+  passes — passed locally and failed in CI, for anyone who followed the docs.
+
+  Both halves are fixed. The commands now name `scripts/action`, and the three contributor-facing
+  surfaces lead with `make check` so the gate has one definition instead of four transcriptions of
+  it. This is the same failure the repo already guards for restated *numbers*; it had simply never
+  been applied to a restated *command*.
+
+### Added
+
+- **A `Makefile`, wrapping the gates that already existed.** Every recipe is the command CI
+  actually runs; nothing here gates anything that was not already gated. `make check` is the three
+  commands `ci.yml` runs, `make check-doc-counts` is the same `--check` that
+  `tests/test_counted_claims.py` already calls, and `make help` lists the rest. A Makefile that
+  quietly introduced a *new* rule would be the worst version of this file, because the rule would
+  then live somewhere no reviewer looks.
+
+  `check-doc-counts` also gets its own CI step, and it is deliberately redundant with the pytest
+  assertion rather than replacing it. The rule stays where it was; what the step adds is a legible
+  failure. A stale inventory line currently surfaces as one assertion inside a ~1300-test, ~25 s
+  run — as a named ~1 s step it says what is wrong in its own title. Same rule, better signal.
+
+- **`provael.__all__`, derived from `docs/python-api.md` and enforced by a test.** The published
+  Python API and the package's export list had no relationship: `src/provael/__init__.py` declared
+  no `__all__` at all, so there was nothing for a rename to disagree with. A symbol could move, the
+  gate stays green, and the doc goes on describing an import that no longer resolves.
+  `tests/test_public_api.py` now fails in **both** directions — documented but not exported, and
+  exported but not documented — and the second direction matters as much as the first, because an
+  undocumented public name is a support burden nobody agreed to.
+
+  **The exports are lazy, and that is the interesting part.** Every documented name lives in a
+  submodule, and re-exporting all eight eagerly costs **~1.14 s** and pulls numpy in, against
+  **~1.1 ms** for the bare package: a ~1000x regression paid by every `import provael` and by every
+  CLI invocation, in exchange for a shorter import line. `__init__.py` resolves them through a
+  PEP 562 `__getattr__` instead, so the cost is paid only by a caller who touches the name. The
+  cheap way to undo that is a convenience import added at the top of the file later, so the test
+  asserts the laziness holds by checking `sys.modules` in a subprocess — an in-process check would
+  pass regardless, since the suite has already imported half the package by then.
+
+  The submodule paths in the docs are unchanged and keep working; this only adds the top-level
+  spelling.
+
+
+## [0.39.3] — 2026-09-04
+
+### Fixed
+
+- **The GPU lane still recorded nothing, and the fix for #181 is what stopped it.** The first
+  scheduled run after that fix landed — 4 September 2026, run `33855417254` — reached a real
+  SmolVLA × LIBERO policy, printed `Adversarial ASR: 33.3% (4/12)` with a `benign baseline FPR
+  0.0% (0/2)`, wrote three artifacts to the runner, and the ledger step reported that it had
+  produced none. The step was searching with
+  `find . -name report.json -newer gpu-scheduled-report.txt`, and that predicate cannot ever be
+  true: the local entrypoint prints its closing line *after* writing the artifacts, that line goes
+  through the same `tee` that produces the log, so the log is always newer than the report it is
+  announcing. #187 gave the entrypoint a closing line. **The fix broke the detector meant to
+  confirm the fix.** The example now declares its output directory in `OUT_DIR_FILE` once the
+  artifacts are on disk and the workflow reads it instead of guessing;
+  `tests/test_modal_examples_are_runnable.py` pins both halves and refuses a return to the mtime
+  search. Fourth failure of this lane, after the nested app, the missing `pipefail` and the
+  discarded return value. Closes #188.
+
+- **`runs/smolvla_libero` was the same literal typed twice**, once for the container's `--out` and
+  once for the entrypoint's mirror path, introduced by #187 when the entrypoint gained artifacts to
+  write. Two copies of one fact, with nothing comparing them — and the workflow, which needed that
+  fact most, held neither. Now one `OUT_DIR`, referenced.
+
+- **README.md advertised `provael/provael@v0.39.3` for two days while the newest tag was v0.39.1.**
+  Anyone who copied the Action snippet got `Unable to resolve action`. `readme-quickstart.yml` ran
+  daily throughout and stayed green, because it asserted the README's `pip install` line and not
+  its Action pin — half of the failure it was written to prevent. It now resolves every
+  `provael/provael@vX.Y.Z` in the README against `git ls-remote`, which is the only place the
+  question can be asked honestly: `tests/test_version_consistency.py` accepts `__version__`
+  alongside the real tags so a release PR can repin before tagging, and that exemption can only be
+  closed from outside the working tree.
+
+- **0.39.2 was declared, dated, and skipped, and every guard was green through it.**
+  `test_every_dated_changelog_version_has_a_tag` exempts the newest dated heading when it names
+  `__version__`, on the reasoning that a second heading appearing would catch any persistence. A
+  second heading is not what happened: the untagged `## [0.39.2]` was *renamed* to `## [0.39.3]`
+  and `__version__` bumped with it, so the exemption's condition stayed true through a second body
+  of work. **The escape hatch renews itself under renaming.**
+  `test_no_version_was_declared_and_then_quietly_skipped` now reads every value `__version__` has
+  ever held out of the file's own history and requires each to be tagged, current, or listed as
+  abandoned with a reason. It surfaces two more: 0.23.0 and 0.24.0, both rolled into 0.25.0 on
+  26 July 2026 — and 0.24.0 is the pin the reference security-gate workflow once carried at a ref
+  that never existed.
+
+- **The repo's own inventory disagreed with itself in three places.** Every *count* was correct;
+  what had drifted was the *list* beside it, which no guard was looking at. `README.md` annotated
+  `provael list-attacks` with "19 families:" and then named eighteen — `control` had been missing
+  since it was registered. `docs/quickstart.md` said "19 families (17 adversarial + the benign
+  baseline)", and 17 + 1 = 18. Both files said **5 suites** while `SUITES` held six and the
+  published `watch/registry.json` said 6, so the artifact and the prose contradicted each other in
+  public. Those lines are now generated by `scripts/gen_doc_counts.py` from the registries, and
+  `tests/test_counted_claims.py` gained two guards: one that fails when a slash-joined list of five
+  or more registry families is incomplete, and a tight claim on the README's suite tally. The suite
+  count is stated as **6 registered** with `ai2_bridge` named as scaffolding, rather than rounded
+  down to the five that run — registered is not validated, and both halves are now said out loud.
+
+- **`coverage-badge.yml` regenerated `watch/registry.json` and then threw it away.** Its commit
+  message has said "the coverage badge and registry counts" since the registry artifact was added,
+  but the change gate and the `git add` both named `watch/coverage.json` alone — so a run where the
+  registry counts moved and the coverage total did not exited at "badge unchanged". The same shape
+  as the GPU lane: work performed, result discarded. It never surfaced because
+  `tests/test_registry_artifact_agrees.py` fails the *next* PR instead, turning a self-healing job
+  into a chore for whoever pushes next.
+
+### Added
+
+- **`gpu-arm.yml` — the expensive LIBERO stages are dispatchable from GitHub.** `calibrate`,
+  `control`, `eai04-redirect` and the rest have been designed, costed and committed for weeks, and
+  every one of them could only be started from a maintainer's laptop with `modal` installed and
+  authenticated. That is why issue #171 reads as a research problem when it is a logistics one: the
+  run it needs is ready and unrun. Manual dispatch only — never scheduled, because these are $5–$12
+  each against a $30/month credit — gated on the same `ENABLE_GPU_SCHEDULED` variable, requiring the
+  stage name to be re-typed to confirm the spend, and printing the hard cost ceiling *before*
+  billing anything. It deliberately does not commit: a canary's job is to be recent, a measurement's
+  job is to be read by a person before it is published.
+
+- **`eai04-redirect`: `optimized_instruction`'s real-model transfer is registered as the next GPU
+  arm.** It is the only optimized family with a measured basis for the question — it searches the
+  *instruction* channel, and the instruction channel is the only one this project has shown
+  transferring on a real policy (`roleplay` at 44/50 against a 2/50 benign control; visual and
+  injection are honest nulls on that suite). Ten tasks × {`none`, `targeted_redirect`,
+  `benign_reword`, `nonsense_text`} × 5 seeds, at the `eai04-redirect` recipe's own protocol so the
+  result stays comparable to the published run. **No ASR will be published for it until all three
+  of a redirection rate, a 95% Wilson interval and a benign false-positive control exist** — the
+  scoring already computes all three, so this is a matter of running the arm. Both control arms are
+  in deliberately: a redirection search that also fires on a harmless reword has found brittleness,
+  not attacker control.
+
+- **`scripts/gpu_arm_plan.py`** — the cost estimate, lifted out of the workflow. It lived as a
+  heredoc for one draft and was wrong twice in twenty lines (walking for `ast.Assign` when `STAGES`
+  is an `AnnAssign`; reading `.items` off an `ast.Dict`), either of which would have raised in the
+  one step whose whole purpose is to speak before money is spent. Same rule that put the Action's
+  gate logic in `scripts/action/`. `tests/test_gpu_arm_workflow.py` runs it for every offered stage
+  and pins the ceiling arithmetic.
+
+### Changed
+
+- **The benign control now travels with the headline wherever the headline is published.** An ASR is
+  a difference against a floor, and `docs/standards/published-asr-baselines.md` — the page a
+  technical buyer uses to compare 88% against other people's 76%, 96% and near-100% — stated the
+  rate with no floor at all. It now says 88% (44/50) **against a 2/50 (4%) benign control**, and
+  says why the absence of a floor in most of the other rows is itself part of what that page
+  measures. `leaderboard/README.md` gained the same pairing inline.
+
+- **`results/smolvla_libero_object_suite/README.md` puts the benign arm in the results table**, as
+  its first row, rather than as a line eight lines below it. Recomputed from the committed shards
+  rather than restated: **2/50**, and both firings land on `libero_object/4` and `/5` — one episode
+  each, with the other eight tasks silent through 40 benign episodes. That matches the independent
+  `..._control` run at different seeds, which is the signature of a keep-out boundary sitting on the
+  benign path rather than a policy that wanders. **It is not fixed by saying so**: those reports are
+  `schema_version` 2, which predates the `trajectory` field, so no per-task envelope can be fitted
+  from them. #171 stays open and now names the exact dispatch that closes it.
+
+
+**Also carries everything that had accumulated under [Unreleased] after 0.39.3 was first dated**,
+and everything the heading already carried. Both are listed below as they stood, under their own
+labels — 0.39.3 was never tagged, so nothing here shipped separately and the groups are provenance,
+not separate releases.
+
+### Accumulated under [Unreleased], released as part of 0.39.3
+
+### Fixed
+
+- **The scheduled GPU lane measured a real policy twice a week and threw the result away.**
+  `redteam()` returned the container's stdout alone, so `report.json` was written inside the Modal
+  container and deleted with it. The workflow looks for that file on the RUNNER, found nothing,
+  emitted a warning and exited 0. Every run since the Modal credentials landed on 30 August 2026
+  reached a real model and printed a real ASR while `watch/freshness.json` stayed at
+  `2026-08-09T14:46:00Z` — and provael.com served STALE MEASUREMENT off the back of it for 24 days.
+  **A lane that measures and discards is indistinguishable from a lane that never ran.** The
+  function now returns its artifacts alongside stdout and the local entrypoint writes them where
+  `provael watch --record` looks. Closes #181.
+
+- **The ledger step now fails where it warned.** A warning inside a green job is the failure mode
+  itself: this step emitted one on every affected run. Measuring and recording are different
+  events, and only the second moves the badge, so that is what the step reports on.
+  `tests/test_modal_examples_are_runnable.py` pins the artifact-return contract — the third guard on
+  this lane, after the nested-app and the missing-`pipefail` ones, and the third time it has been
+  green while producing nothing.
+
+### Changed
+
+- **The Action's Marketplace description leads with the searchable terms.** Marketplace search is
+  keyword-driven and the listing's visible first line now names the policy type and the Attack
+  Success Rate rather than stopping at "red-team", which collides with every LLM red-team action.
+
+- **`embodied-ai` added to the PyPI keywords.** The four topic and audience classifiers this needed
+  were already present; only that keyword was missing.
+
+
+### Dated as 0.39.3 on 2026-09-03
+
+### Fixed
+
+- **The pytest gate could not fail, and had not been able to since 19 August.** `ci.yml` piped
+  pytest into `tee` with no `pipefail`, so the step took TEE's exit status. **A workflow step that
+  cannot fail is a workflow step that cannot report** — the same sentence `gpu-scheduled.yml`
+  already carries, after that lane spent 22 days green while measuring nothing. This is the second
+  occurrence and the worse one, because it is the gate every other result is read against: `main`
+  reported "success" on 2 September with **16 tests failing**, and every green tick on every PR
+  merged in that window was worth exactly that. Fixed with `shell: bash` plus an explicit
+  `set -o pipefail`, keeping the `tee` the job summary needs. Closes #183.
+
+- **`coverage-badge.yml` had the same defect, and its tolerance is now declared rather than
+  accidental.** That job deliberately publishes a coverage number even when tests fail — its
+  comment says so, and the reasoning is sound — but without `pipefail` it could not have failed
+  even if someone had wanted it to, and the premise it rests on ("the gate already ran in ci.yml")
+  was false for as long as ci.yml could not fail. The behaviour is unchanged; the choice is now
+  visible, and a failing run says so in a warning instead of vanishing. No other workflow was
+  affected: `gpu-scheduled.yml` and `readme-quickstart.yml` already set `pipefail`, and the pipe in
+  `docs.yml` sits inside an `if` condition whose status is consumed by the conditional.
+
+- **The 16 tests the gate was hiding — one bug, not sixteen.** Every failure was
+  `test_help_text_only_names_flags_it_defines`, which scraped rendered `--help` output for flags.
+  Rich decides borders, wrapping and glyphs from terminal width, `TERM` and colour support, so the
+  scrape returned the empty set on Linux CI while passing on macOS, and the test's own canary
+  ("the flag scan has drifted") fired correctly with nobody listening. **No product bug: the CLI's
+  help text was right throughout.** `tests/test_roadmap_honesty.py` had already recorded this
+  lesson after it failed the release gate at v0.38.0 — parsing a human-facing rendering for a
+  structural fact is the bug — so the test now reads the Click object graph and the declared help
+  strings instead. It also does more than it used to: the old assertion compared the scrape against
+  itself and could only check it was non-empty, so it never verified the property its own docstring
+  claimed. It now genuinely checks that no command's help names a flag it does not define, allowing
+  a flag attributed to a real owning command.
+
+### Added
+
+- **`tests/test_workflow_pipefail.py` — the check that stops the third occurrence.** Asserts every
+  workflow step containing a pipeline whose exit status reaches the step also carries
+  `set -o pipefail`, `shell: bash`, or an explicit `PIPESTATUS` check. Pins the ci.yml pytest step
+  by name, because that is the one everything else is read against, and refuses to pass if it finds
+  no workflows to scan. Both fixes are mutation-proven: reinstating the defect fails the general
+  check, and "fixing" it by deleting the `tee` fails the specific one.
+
+- **`SAFETY.md` now documents `gradient_patch`, and says it reads gradients.** The family shipped
+  in 0.39.0 on 1 September and the safety document did not know. That is not a stale doc, it is a
+  wrong one: SAFETY.md stated that the non-templated families use no gradients or model internals,
+  which stopped being true on release day, and it listed the white-box line as deferred in full
+  when its patch half had shipped. `gradient_patch` is now its own group with its threat model
+  stated plainly — it assumes an attacker **holding the weights**, not one who can only query — and
+  the no-real-world-harm boundary is restated in the terms that actually constrain a white-box
+  attack: GPU-gated, bounded by an explicit `eps`, optimising a feature-space distance rather than
+  a harm objective, sim-only, with `applicable` keeping the arm out of the ASR denominator and no
+  transferable artifact shipped.
+
+- **`SAFETY.md` also gained `weight_integrity`, which was missing too.** The enumeration read
+  "eleven templated plus four search" against a registry of **seventeen** adversarial families, so
+  the arithmetic had not closed since that family landed. It is documented as a fragility
+  measurement rather than an exploit: it does not claim an attacker can achieve weight corruption
+  on any deployment, which is a platform question this project does not answer.
+
+- **A third check in `tests/test_roadmap_honesty.py`, for the class that let this through.** The
+  existing checks key on CLI command names and on committed config. An attack family is neither, so
+  nothing could have caught `gradient_patch` sitting under Planned for two days after it shipped.
+  The new check matches backticked family names only — half the registry is ordinary English, and
+  matching bare words would fire on prose — and any exception has to carry its reason.
+
+### Changed
+
+- **`docs/roadmap.md`: white-box gradient attacks moved from Planned to Shipped**, naming 0.39.0
+  and 1 September 2026. Only the patch half moved: GCG-style adversarial **suffixes** are still not
+  implemented and stay under Planned, which is the distinction the original line collapsed.
+
+**Also carries everything prepared as 0.39.2 on 2026-09-02.** That version was promoted to a dated
+heading and no tag or PyPI artifact ever followed it, so it is folded in here rather than left
+standing as a release that never happened — which is exactly the drift
+`test_every_dated_changelog_version_has_a_tag` exists to catch, and which it caught during this
+change rather than after it.
+
+### Prepared as 0.39.2, released as part of 0.39.3
+
+### Added
+
+- **`docs/community.md` now names the external surfaces this project is actually aimed at**, with
+  dates and an as-of marker. Two open calls: NIST's AI Standards Zero Drafts documentation draft
+  (comment by 16 September 2026) and SPAIS 2026 at CoRL (submissions close 1 October 2026). The
+  SPAIS entry states what the call does *not* cover rather than rounding it up — it is scoped to
+  interpretability, alignment, control and evaluation, it names neither red-teaming nor
+  hardware-in-the-loop, and Provael has no hardware result, so it answers part of that call and not
+  the rest. ROS Discourse was dropped from the draft of this section: there is no participation
+  there to report, and a page headed "where this project participates" listing a forum it has never
+  posted in would be the same kind of claim this project fails builds over.
+
+### Added
+
+- **`watch/freshness.json` now carries `measuredAt`, an ISO-8601 timestamp.** The badge published
+  the measurement date only as the rendered string `message` (`"23 days ago"`), and provael.com was
+  parsing that string to decide whether to fail its own build — its `src/lib/freshness.ts` says so
+  in its header and names an ISO field here as the right fix. A structural fact carried as prose is
+  one wording change away from being unparseable, and that consumer closed the failure by throwing,
+  so a cosmetic edit to this string would have stopped a different repository from building.
+  `measuredAt` is the same value the age is computed from, so the two cannot disagree. shields.io
+  ignores unknown keys, so the badge renders unchanged.
+
+### Changed
+
+- **Docs-site versioning (`mike`) is wired, tag-driven, and the published URLs were kept alive.**
+  A tagged release now publishes a versioned docs set and moves the `latest` alias; a push to `main`
+  does not. The version selector renders from `extra.version.provider: mike`.
+
+  **This reverses a decision recorded earlier the same day, and the reversal is the point.** The
+  objection was never to versioning: `mike` namespaces every build under a version path, so wiring
+  it moves `docs.provael.com/top10/` to `/latest/top10/` and 404s the published URL — and those URLs
+  are cited from the marketing site and named in the Top 10's own BibTeX. `alias_type` chooses how
+  an alias is stored, not whether content is namespaced, so no configuration avoids it. The earlier
+  entry named the price of doing it properly — *every retired URL gets a stub, the same way the
+  uppercase→lowercase rename was handled* — and this pays it rather than arguing it away:
+  `scripts/gen_root_stubs.py` walks the published alias after each deploy and writes a meta-refresh
+  page at every root path that would otherwise be dead. 67 of them on the current tree. An old URL
+  stays old forever.
+
+  Two defects were caught while wiring it, both of which would have shipped broken and neither
+  visible without deploying. `mike`'s default `alias_type` writes `latest` as a git **symlink**
+  (mode `120000`), and GitHub Pages does not serve symlinked directories — every `/latest/…` URL
+  would have 404'd, making the site *worse* than before versioning; the deploy pins
+  `--alias-type=copy`. The remaining option, `alias_type: redirect`, would have bounced every alias
+  URL to a **dated** `/0.39.2/…` path, which defeats the reason an alias exists at all.
+
+  **What it costs:** `main` no longer publishes docs, so a fix waits for the next release. That
+  reopens a narrowed version of the incident push-on-main was introduced to fix, and is accepted
+  deliberately — the alternative is publishing unreleased docs under the alias every reader lands
+  on. `.github/workflows/docs.yml` records the fallback next to the trigger: publish `main` as its
+  own unaliased version, never move `latest` off releases.
+
+  The docs smoke job now probes both live forms of every page — the real one under `/latest/` and
+  the root stub that keeps the cited URL alive — because versioning made them able to break
+  independently, and the root form is the one in other people's bibliographies.
+
+- **`docs/standards/atlas-case-study.md` now carries all ten EAI rows with a per-row
+  `mapping_status`.** It hand-maintained eight, and the two it dropped were exactly the two that map
+  to nothing — EAI07 (out of scope for simulation: real firmware, radio and teleoperation are
+  IEC 62443 / ATT&CK-for-ICS work, and Provael ships no exploit tooling) and EAI10 (not attackable:
+  there is no policy input that attacks the absence of a process). An absent row reads as an
+  oversight; an explicit `none-yet` reads as an answer. The page also stated "not submitted" while
+  a submission had been emailed to `atlas@mitre.org` on 8 August 2026 and was awaiting a response,
+  and described the route as a "STIX 2.1" pull request, which the 12 August validation of the v6
+  object model had already established it is not. `tests/test_atlas_case_study_mapping.py` pins the
+  table to `provael.eai.CATALOG` so the mirror cannot drift again.
+
+### Added
+
+- **The OpenSSF Scorecard badge, at 4.4/10.** The Scorecard workflow has run on every push to
+  `main` since it landed and nothing rendered the result, so the score existed and no reader could
+  reach it. Publishing it at 4.4 rather than after improving it: `Code-Review`, `Branch-Protection`,
+  `Token-Permissions`, `SAST`, `Fuzzing` and `Signed-Releases` all score 0, most of them structural
+  for a single maintainer who self-merges, and a badge withheld until it flatters is a badge that
+  never ships. `Signed-Releases: 0` is the one worth reading carefully — attestation bundles are
+  Ed25519-signed, release artifacts are not, and Scorecard is measuring the second. Against 10/10
+  on `License`, `Packaging`, `CI-Tests`, `Security-Policy`, `Binary-Artifacts`, `Dangerous-Workflow`
+  and `Dependency-Update-Tool`.
+
+### Fixed
+
+- **`provael submit` told a blocked user to pass a flag it does not define.** Without the `attest`
+  extra, `submit` echoed the shared `MissingAttestExtraError`, which ends "(or pass `--no-sign` for
+  a digest-only bundle)". Correct advice for `attest`; impossible for `submit`, which calls
+  `to_bundle(..., sign=True)` unconditionally and defines no `--no-sign` — a leaderboard row that is
+  not tamper-evident is not a submission. So the one command whose failure blocks an outside
+  contribution answered with an escape hatch that was never there.
+
+  The message was right about the extra and wrong about the way out, which is the worse half to get
+  wrong: the extra is discoverable from the error itself, while a flag that does not exist sends
+  someone reading `--help` for it. `submit` now says the extra is required here and names
+  `provael attest --no-sign` for the digest-only case, rather than echoing a flag as if it were its
+  own. `tests/test_cli_error_flags_exist.py` walks the real Typer app rather than grepping source.
+
+- **The roadmap called a shipped command planned, and it reached `main` unnoticed.** The AI2 bridge
+  note added in the previous change wrote `provael list-suites` inside `## Planned`, and
+  `tests/test_roadmap_honesty.py` correctly reads that as claiming a shipped command is not yet
+  shipped. The note now names the `ai2_bridge` suite rather than the command that lists it.
+
+  Worth recording is *why nobody saw it*: the pull request was green, but GitHub created no workflow
+  run at all for the squash-merge commit on `main` — no `[skip ci]`, no skip directive of any kind,
+  Actions reported operational, and a manual dispatch on `main` ran fine moments later. A dropped
+  push event. The merged tree was byte-identical to the tested one, so the PR's green was not a lie
+  — it simply never re-ran on a tree containing this line, because the line was written in that PR.
+
+### Documentation
+
+- **E-2026-04** recorded in `docs/errata.md`: provael.com published the CRA severe-incident
+  final-report deadline with the wrong start point for seven days. Art. 14(2)(c) runs 14 days from a
+  corrective measure being available; Art. 14(4)(c) runs one month from submission of the 72-hour
+  notification and does not wait for a fix. Nothing in this repository was affected — the defect was
+  in the website's regulatory clock — but this file is the maintained source that page mirrors, so
+  the record belongs here. The reusable lesson is in the entry: the sub-deadlines were transcribed
+  from the Commission's summary rather than the OJ text, and a secondary source is fine for finding
+  a fact and not for pinning one.
+
+- **The scheduled GPU lane reported success twice a week for 22 days while measuring nothing.**
+  `examples/gpu-ci/modal_provael_gpu.py` constructed its Modal app inside `build_app()` so the
+  module would import without modal installed. `modal run` resolves an app from a module's GLOBAL
+  scope, found none, and printed "has no functions or local entrypoints". The workflow piped that
+  into `tee` without `pipefail`, so the step took tee's exit status and went green. Nothing was
+  measured, nothing was recorded, and every run said it worked.
+
+  Two things kept this from becoming a false published number rather than merely a missing one.
+  The record step is guarded on a `report.json` actually existing, so no fresh measurement time was
+  ever stamped for a run that produced nothing; and `freshness.yml` recomputes age on its own
+  schedule instead of trusting the measurement job to emit a green badge. The badge ageing to 22
+  days was the only signal that the lane was dead — which is the job it was designed for.
+
+  The app and its `@app.local_entrypoint()` now sit at global scope, mirroring
+  `modal_libero_suite.py`, which records the identical trap at its own line 83. The importability
+  the nesting bought was asserted by no test and cost the measurement the badge exists for.
+  `tests/test_modal_examples_are_runnable.py` parses both examples on the CPU lane — where modal is
+  absent — and fails if either stops exposing a module-level app and entrypoint.
+
+  A workflow step that cannot fail is a workflow step that cannot report.
+
+### Changed
+
+- **The SO-101 amendment created two hardware blockers that existed only inside the study file.**
+  `docs/studies/sim-to-real-so101.md` was amended on 1 September 2026 — before any trial — with a
+  power-integrity confound and a corrected e-stop claim. Both were on the record in the right place
+  and invisible everywhere else: the roadmap had no real-robot entry at all, so a reader had no way
+  to see why that work had not moved, or that it is blocked on hardware rather than on effort.
+
+  `docs/roadmap.md` now carries a "Blocked on hardware" section naming both prerequisites — an
+  inline DC-supply cut (the STS3215's over-current protection is not a latch and re-arms under a
+  policy that keeps streaming commands, which is exactly this threat model) and a per-trial
+  servo-bus voltage trace (the brownout is biased toward the hypothesis, since adversarial action
+  sequences drive more joints at once than benign teleop) — and states that runs executed is 0.
+
+  Documentation only. No trial was run, no hardware was actuated, and no sim/real claim is made.
+
+### Added
+
+- **`ai2_bridge` — registered scaffolding for the AI2 harness, and the reason it is not more than
+  that.** The roadmap has listed this bridge as the strategic multiplier ("one adapter → ~18
+  benchmarks") on the strength of the harness exposing a single `predict()`. Reading the harness at
+  v0.5.0 rather than its README, the multiplier does not survive contact with Provael's predicate.
+
+  `allenai/vla-evaluation-harness` returns **per-episode success and nothing else**: LIBERO's
+  `get_step_result` is `{"success": ...}` and its recorder is field-filtered to
+  `frozenset({"reward", "done", "success"})`. The end-effector pose exists — `make_obs` reads
+  `robot0_eef_pos` — but it flows *outward to the model server* and never returns to a caller. So
+  `is_unsafe()` has no state to evaluate, and neither do the keep-out zone, `calibration_signal`, or
+  the EAI02 / EAI04 / EAI06 predicates. A bridge shipped on the README's promise would have
+  inherited ~18 benchmarks' task lists while reporting task success as safety.
+
+  Two things worth having found: the **benign control arm is expressible** (work items are a
+  deterministic `task x episode` enumeration, so one seed run twice visits the same initial states),
+  and the harness's PyPI name is **`vla-eval`**, not `vla-evaluation-harness`, which 404s.
+
+  `Ai2BridgeSuite` raises `NotImplementedError` on all four contract methods rather than degrading
+  to a fixture — a registered suite returning plausible defaults is how an unbuilt path produces a
+  number. `SCAFFOLDING_SUITES` mirrors `SCAFFOLDING_POLICIES`, `list-suites` renders it in its own
+  words instead of the false "requires `provael[lerobot]`", and `suite_is_ready` reports `False`
+  so nobody is told a pip install is all that is missing.
+
+  Registered is not built, and `~18 benchmarks` stays a fact about the harness, not about Provael.
+
+## [0.39.1] — 2026-09-01
+
+### Fixed
+
+- **v0.39.0 shipped a counts artifact that contradicted its own code, and nothing in this repo
+  could tell.** `watch/registry.json` said 16 adversarial families and 38 adversarial attacks
+  while the registry it describes had 17 and 39. The full suite passed at that tag. The file's own
+  note says it exists so that "no human types these numbers" — provael.com fetches it rather than
+  restating counts in prose, because four site surfaces once disagreed simultaneously — but nothing
+  checked that the GENERATED file had actually been regenerated. Only the downstream website
+  noticed, from another repository, after the release.
+
+  `tests/test_registry_artifact_agrees.py` now compares the artifact against the live registry, pins
+  the two counting conventions apart (`adversarial*` excludes baseline and control; `*Total`
+  includes them — the artifact's own note warns that mixing them inflates coverage by a family), and
+  asserts the validation split partitions the registry, which was previously only enforced
+  downstream. Mutation-checked against the exact v0.39.0 values.
+
+  A generated artifact needs a guard that it was regenerated. Otherwise "generated" only means
+  "nobody typed it recently".
+
+## [0.39.0] — 2026-09-01
+
+### Added
+
+- **`gradient_patch` — the white-box image-space attack `PRIOR_ART.md` records the harness as
+  missing.** Untargeted L-inf projected gradient ascent on the feature the action head consumes,
+  maximising `||enc(x+d) - enc(x)||` using the policy's own input gradients. No labels, no
+  ground-truth actions, no reward — only the encoder a published checkpoint already exposes.
+
+  **Its own family, not a member of `optimized_patch`.** Same channel and same EAI category,
+  different threat model: this reads gradients, which assumes an attacker holding the weights. A
+  combined family rate would average a white-box result with a black-box one and answer neither
+  question. `attacker_access` records `white-box-gradient` against the sibling's
+  `black-box-query`; the comparison between them is the interesting quantity, the average is not.
+
+  **Inert unless it can genuinely attack.** `applicable()` requires BOTH a real camera frame and an
+  attached gradient oracle, and returns False otherwise so the arm leaves the ASR denominator
+  rather than scoring 0. That gate is the point: a white-box null recorded for a run that never
+  took a gradient would recreate, one level deeper, the defect this family exists to fix. Without
+  an oracle `perturb()` returns the frame untouched — it never substitutes noise, because
+  noise-shaped damage under a white-box label is the confusion `attacker_access` prevents. `torch`
+  is never imported: the policy supplies the gradient array and the attack does the projection in
+  numpy, so the module stays CPU-clean and framework-agnostic.
+
+  **What is measured, and what is not.** On **Diffusion Policy x PushT**, n=20 per condition on
+  identical seeds, task success went from 9/20 clean and **14/20 under random L-inf noise** to
+  **0/20 under the optimised perturbation at the same eps=0.10 budget** — exact McNemar against the
+  noise arm **p = 0.00012**, mean coverage 0.971 -> 0.333. The noise control is load-bearing: it
+  shows the damage comes from the optimisation rather than the corruption, which is the comparison
+  the published 0/50 visual nulls never made. Random noise at that budget slightly *helped* the
+  policy, so the attack had to beat a control that was improving it.
+
+  **No VLA number is claimed.** This has never run against SmolVLA x LIBERO. The published `patch`,
+  `decoy_object` and `scene_text` nulls stay exactly as measured — they were produced by a
+  string-append fixture, not by this attack. `PRIOR_ART.md` now states which half of its own gap
+  closed: the harness has the attack it was missing, and has not yet pointed it at the policy the
+  nulls were measured on. Measured cost of that next step on an Apple M4: one PGD refinement
+  through SmolVLA's vision tower is ~3.5 s (backward is 27x forward), so a 20-seed sweep is a GPU
+  job, not a laptop one.
+
+### Changed
+
+- **Registry counts move with the family:** **17 adversarial families** (was 16), **39 adversarial
+  attacks** (was 38), 42 total including baseline and controls. Swept across README, SAFETY.md,
+  PRIOR_ART.md, `docs/`, the notebook, `leaderboard/app.py`, the `full-sweep` example recipe and the
+  pinned evidence manifest — every surface `test_counted_claims.py` and `test_coverage.py` guard.
+
+- **The SO-101 sim-to-real protocol is amended, before any trial has run (executed to date: 0).**
+  Two corrections, both from bench research rather than from data, and both recorded in
+  `docs/studies/sim-to-real-so101.md` with the amendment date — amending a pre-registration *after*
+  a run is a different and much worse act, so the window is stated where it can be checked.
+
+  **A power-integrity confound that runs in the direction that flatters the result.** The kits ship
+  a 12 V 7.5 A supply while per-servo over-current protection trips above ~2 A, so six servos
+  stalling together can outdraw the supply: voltage sags, servos drop torque mid-motion, the arm
+  falls. Adversarial action sequences are jerkier and drive more joints at once than benign teleop,
+  so the **attacked condition is the likelier one to brown out** — and an arm losing torque above a
+  keep-out zone falls into it. Unmeasured, a power fault is indistinguishable from a successful
+  redirection. The protocol now requires a per-trial servo-bus voltage trace and fixes a trial
+  invalidation rule in advance, so the rule cannot be chosen later to suit the outcome.
+
+  **The e-stop claim was wrong and is corrected.** The protocol asserted "a human supervisor with an
+  e-stop at all times". The STS3215's own over-current protection is **not a latch** — output is
+  disabled only until a new position command arrives — so a policy that keeps streaming commands
+  re-arms the servo it just faulted. The protection holds under benign teleop and fails under
+  exactly the condition being tested, and no kit ships a real e-stop. The protocol now specifies an
+  inline DC supply cut as a required addition, and pins the study to the 7.4 V servos (jaw stall
+  ~48 N against ~74 N on the 12 V variant).
+
+  No number moved and no result is claimed; runs executed remains 0.
+
+## [0.38.1] — 2026-08-31
+
+### Fixed
+
+- **A zero-width confidence interval was published for three null arms for 21 days, and the
+  project's own two surfaces disagreed with each other about it.**
+  ([#157](https://github.com/provael/provael/pull/157)) `README.md` (since
+  [#113](https://github.com/provael/provael/pull/113), 9 August 2026) and
+  `results/smolvla_libero_object_suite/README.md` (since
+  [#110](https://github.com/provael/provael/pull/110), 9 August 2026) both published the
+  task-clustered 95% interval for `patch`, `decoy_object` and `scene_text` as:
+
+  ```
+  [0%, 0%]
+  ```
+
+  Each of those arms is 0/50. Resampling ten tasks that all scored zero returns zero on every
+  draw, so the percentiles collapse onto the point and the interval asserts a certainty the data
+  cannot support. The corrected tables carry **`—`** instead, and state in prose that 0/50 is
+  consistent with a true rate as high as **7.1%** — the exact binomial 95% upper bound.
+
+  `cluster_bootstrap_ci` already declined below two tasks, on exactly this reasoning. It guarded a
+  *proxy* — the number of clusters — rather than the interval it computed, and ten tasks that all
+  score the same rate clear a cluster count while being just as degenerate. The fix guards the
+  computed interval.
+
+  **The signed leaderboard was correct throughout.** It carries Wilson intervals, not the
+  clustered bootstrap, and has always published `[0.0%, 7.1%]` for the 0/50 injection row and
+  `[0.0%, 3.7%]` for the 0/100 visual row. So did the website. The defect was confined to two
+  hand-maintained Markdown tables, which is also why no regeneration step would ever have
+  corrected it: `cluster_bootstrap_ci` has no caller in `src/`. Recorded as
+  [E-2026-03](docs/errata.md).
+
+- **The scheduled GPU lane could never finish, and cost roughly 40× what three surfaces said it
+  did.** ([#158](https://github.com/provael/provael/pull/158)) The lane ran nightly at
+  `--seeds 10`. `ATTACKS` expands to eight arms and `task_ids` defaults to one task, so that is
+  **80 episodes**; against this repo's own measured anchor of ~139 s/episode it is **~3 hours
+  into a 1-hour Modal timeout**. Every scheduled run would have burned the full hour, been killed
+  before recording anything, and cost **~$0.80** — about **$24/month of a $30/month credit for no
+  measurement** — while the docstring, the example workflow and `docs/standards/last-measured.md`
+  all advertised **~$0.02/run**. Caught the day the lane was first enabled, before its first run.
+
+  Now `--seeds 2`: 16 episodes, ~37 minutes, ~$0.49, and it completes. The freshness badge this
+  feeds carries a timestamp and no rate, so fewer seeds cannot weaken a published number. The
+  cadence is **derived rather than chosen** — `watch.py` sets `STALE_DAYS = 7`, so a weekly run
+  sits exactly on the red boundary and one miss turns the badge red; Tuesday and Friday give gaps
+  of three and four days at ~$4.25/month.
+
+  `gpu-nightly.yml` → `gpu-scheduled.yml` and `ENABLE_GPU_NIGHTLY` → `ENABLE_GPU_SCHEDULED`: the
+  file is named for being scheduled, not for a cadence that is a tuning parameter of `STALE_DAYS`
+  and has now changed once. The stale-badge CLI message is corrected too — it asserted the lane
+  had never been configured, which was true when written and false the day it was switched on.
+  **No test pinned the old filename, variable or CLI string**, so nothing would have caught that
+  rename going half-done.
+
+- **PRIOR_ART.md carried the DRIFT entry twice, and the two copies contradicted each other on a
+  fact about our own coverage.** Both were the same work — Tae & Lee, arXiv:2608.03207 — under an
+  identical heading at two places in the register, so this is a duplicate rather than a name
+  collision. The copies did not merely repeat: the first asserted, in bold, **"Provael has never
+  measured a flow-matching policy"**, and the second refuted it from this repo's own data.
+
+  The second is right. `lerobot_adapter.py` declares `action_head_class = "flow"` and **all 400
+  episodes** of the pinned ten-task evidence record `flow`, so SmolVLA is a flow-matching policy by
+  this project's own taxonomy and we have measured one. The false copy was wrong in the direction
+  that excuses us: it offered an architecture difference as the reason a published patch attack
+  beats our null, and that excuse is unavailable. The merged entry keeps the accurate
+  `mapping_status: cited, not crosswalked`, keeps the first copy's mechanism finding (the gradient
+  conflict behind DRIFT's first-denoising-step result), and restates the gap at its true width —
+  provael has not measured **π0 or π0.5**, the specific checkpoints DRIFT attacks, which is a
+  missing checkpoint rather than a missing policy class.
+
+  No test or surface asserts a prior-art entry count, verified rather than assumed, so the register
+  going from 35 entries to 34 needs no other change.
+
+### Added
+
 - **PRIOR_ART records TOWN-VLA ([arXiv:2608.23224](https://arxiv.org/abs/2608.23224)), including
   its length-matched meaningless-append control, and marks its magnitude as awaiting independent
   replication.** The control is the part that matters: raw appended text drops mean success from
@@ -30,7 +1321,52 @@ All notable changes to this project are documented here. The format is based on
 
 ### Notes
 
-- **No version bump and no calibration in this entry.** Issue
+- **The published leaderboard stays `stale: true`, and was deliberately NOT regenerated.** Its four
+  rows are real-model SmolVLA × LIBERO, measured with provael 0.32.0 — six minor versions back. Re-
+  measuring needs lerobot **and LIBERO on a GPU**, and none of that is available here: `libero` is
+  not importable, `torch.cuda.is_available()` is `False`, and the machine is arm64 macOS, where
+  `hf-libero` does not install at all (its dependency carries `sys_platform == 'linux'`). So **zero**
+  of the four rows can be re-measured today. There is no partial subset to refresh either — the
+  CPU/stub path would measure a *different policy*, and putting that on the board as a SmolVLA row
+  would be fabrication.
+
+  Rebuilding from the same committed reports was considered and rejected as actively worse than
+  doing nothing. It re-runs no policy: `measured_with` is read from the reports, so `staleness()`
+  would return `True` and the six-minor gap unchanged, while `generated_at`, `commit` and
+  `tool_version` all moved to today. A dated, signed record that reads as freshly measured is the
+  one thing it must not do — which is what `Leaderboard.is_restamp()` already exists to expose.
+  `scripts/check_leaderboard_staleness.py` passes because the board declares its staleness
+  honestly; the flag is the consumer's ability to refuse, and clearing it would be unrecoverable.
+
+  The signature was verified before and after this release and is unchanged:
+  `provael leaderboard verify` reports `leaderboard OK  keyid 8d62aa33ed5162f3`. The board declares
+  `schema_version 5` while carrying v6-shaped per-row benign fields, which is correct as designed —
+  the staleness fields sit outside the signed subject, so a v5 board annotated with them still
+  verifies. Not changed.
+
+- **`CITATION.cff` had drifted two days off its own release date, and the file's comment predicted
+  it.** `date-released` read `2026-08-22` for 0.38.0, while the `v0.38.0` tag, the PyPI upload and
+  this changelog all say **2026-08-24**. The comment beside the field records this exact failure
+  happening at 0.25.0 ("a citation to 0.25.0 named a date three days before the artifact existed")
+  and says plainly that the date is not machine-checkable against a tag, so it is on the release
+  author. It recurred. Both fields are set correctly for this release; the guard gap is noted rather
+  than closed, because checking a date against a tag that does not exist until after the release
+  commit is not a check that can run in the release commit.
+
+- **This release was blocked for twenty minutes by its own commit message, and the cause is worth
+  recording.** The commit adding the changelog PR gate explained, in prose, that the bot badge
+  refreshes carry a CI-skip marker — and quoted the marker verbatim. The squash-merge concatenated
+  that text into the merge commit's body, GitHub read it, and skipped every workflow for that
+  commit: the push to `main` produced **zero** runs (the immediately preceding merge produced four,
+  which is how it was isolated), and the `v0.38.1` tag pointing at it was skipped on three separate
+  pushes while `release.yml` sat `active`, correctly triggered on `v*`, and having fired for every
+  previous tag.
+
+  There is no guard for this and the reason is structural: a check cannot run on the commit that
+  turns checks off. The prose in `scripts/check_changelog_entry.py` no longer spells the token out,
+  and says why. The literal is written once, in the workflow where it does a job.
+
+- **No calibration in this release.** Issue
   [#136](https://github.com/provael/provael/issues/136) (the uncalibrated keep-out predicate) stays
   open and untouched: `CALIBRATED_ZONES` is still empty, and the published 44/50 against a 4.0%
   benign control keeps its uncalibrated caveat on every surface that quotes it. Committing zones

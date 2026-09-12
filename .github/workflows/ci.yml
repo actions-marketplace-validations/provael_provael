@@ -28,15 +28,35 @@ concurrency:
 #   package build + metadata ........ `build` (uv build + twine check)
 #   docs strict ..................... .github/workflows/docs.yml
 #   optional integration ............ gated (PROVAEL_INTEGRATION); skips here. The real-model path
-#                                     runs in gpu-nightly.yml (scheduled, and only when the
-#                                     ENABLE_GPU_NIGHTLY repo variable is "true"), NOT as a release
+#                                     runs in gpu-scheduled.yml (scheduled, and only when the
+#                                     ENABLE_GPU_SCHEDULED repo variable is "true"), NOT as a release
 #                                     gate — release.yml re-runs this CPU gate plus a tag/version
 #                                     match, but it does not run the GPU integration tests.
 jobs:
   check:
-    name: ruff + mypy + pytest (CPU, no lerobot)
+    # The matrix value is in the name because GitHub renders a custom job name verbatim: without it
+    # both legs appear under one label and a red tick does not say which interpreter broke.
+    name: ruff + mypy + pytest (CPU, no lerobot, Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      # Both legs always run to completion. A break on one interpreter is a fact ABOUT that
+      # interpreter, and the fastest way to know whether it is version-specific is the other leg's
+      # result — which fail-fast throws away at exactly the moment it is worth most.
+      fail-fast: false
+      matrix:
+        # `requires-python = ">=3.12"` admits more than one interpreter, so more than one is run.
+        # Until this existed, "works on 3.13" was untested rather than merely unadvertised, and the
+        # trove classifiers named 3.12 alone against that open floor (#221, #222). The classifier
+        # list in pyproject.toml is this list, and the two move together.
+        #
+        # 3.14 IS DELIBERATELY ABSENT, and not because provael fails on it — the suite passes there.
+        # `uv.lock` pins numpy 2.2.6, which ships a cp314 macOS wheel and no cp314 manylinux one, so
+        # `uv sync --locked` below cannot install on ubuntu-latest under 3.14. It is the only cp314
+        # gap in the locked CPU set. The leg returns when the lock moves to a numpy that publishes
+        # one (2.5.3 does) — not by loosening `--locked`, which would make every lane stop
+        # reproducing the set the release is built from.
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -49,12 +69,17 @@ jobs:
           # `fetch-depth: 0` and not `fetch-tags: true`: the latter was tried first and CI still
           # came up tagless on a PR's merge ref, which the guard caught. Full history is cheap on
           # a repo this size and is unambiguous.
+          #
+          # `test_citation_date_matches_its_tag` in the same module reads the tag list too, and it
+          # SKIPS rather than fails when the tag is missing — deliberately, since a release PR bumps
+          # `version` before the tag exists. That makes it the guard that goes quiet first if this
+          # line regresses, so it is worth knowing it rides on the same fetch.
           fetch-depth: 0
 
-      - name: Install uv (pinned Python 3.12)
+      - name: Install uv (Python ${{ matrix.python-version }})
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
 
       - name: Sync core + dev (no extras)
@@ -69,6 +94,15 @@ jobs:
         # linter or type-checker could see them. Extracting them only pays off if the checks
         # actually run on them.
         run: uv run mypy src scripts/action
+
+      # The generated inventory lines must match the registries. This rule is ALREADY enforced,
+      # inside `tests/test_counted_claims.py`, and it stays enforced there — this step adds no new
+      # rule and is not a second source of truth. What it adds is a legible failure: a stale
+      # inventory line otherwise surfaces as one assertion inside a ~1300-test, ~25 s run, and here
+      # it is a named ~1 s step that says what is wrong in its own title. The incident it descends
+      # from is README.md annotating `list-attacks` with "19 families:" and then naming eighteen.
+      - name: Generated doc counts are current
+        run: make check-doc-counts
 
       # Case-exact relative-link check. It has to run HERE, on Linux, and not as a local pre-commit:
       # macOS and Windows are case-insensitive, so a link to docs/TOP10.md resolves fine on the
@@ -99,7 +133,16 @@ jobs:
       # run and written to the job summary, so a slide shows up as a number moving rather than as a
       # threshold being edited.
       - name: Test (pytest, CPU only) + coverage
+        # `set -o pipefail` is load-bearing, not hygiene, and this is the SECOND place it was
+        # missing. Without it the step takes TEE's exit status, so pytest failed and the job went
+        # green: `main` reported "success" on 2 Sep 2026 while 16 tests were failing, and had done
+        # since this pipeline landed in d7bc1e2 on 19 Aug. A step that cannot fail is a step that
+        # cannot report — the same sentence gpu-scheduled.yml carries for the same reason, after
+        # that lane spent 22 days green while measuring nothing.
+        # tests/test_workflow_pipefail.py now asserts this across every workflow.
+        shell: bash
         run: |
+          set -o pipefail
           uv run pytest -q --cov=src/provael --cov-report=term --cov-report=xml --cov-fail-under=85 \
             | tee /tmp/pytest.out
           COV=$(grep -E '^TOTAL' /tmp/pytest.out | awk '{print $NF}')

@@ -160,6 +160,12 @@ backdoor forcing an attacker-specified multi-step action sequence. Its stated ga
 tend to induce untargeted failures or static action states, leaving targeted attacks that drive VLAs
 to perform precise long-horizon action sequences largely unexplored."
 
+They also name a reproducibility problem we hit from the other end: **differences in action
+tokenizers across VLA architectures "hinder reproducibility and fair comparison"**. That is the
+same seam *Same Weights, Different Robot* (below) opens at the deployment side, and the same one
+our action-space normalisation work keeps running into. If their taxonomy stabilises, ours should
+crosswalk onto it rather than compete with it.
+
 **How we differ — and where we do not.** Being honest here matters more than sounding novel:
 AttackVLA **already occupies** the "one harness, many attacks, comparable ASR" position, and it
 does so with **real-robot evaluation we do not have**. We do not claim to have originated a unified
@@ -251,36 +257,6 @@ harmlessness guarantee covers under that shift is genuinely unclear. It may hold
 degrade gracefully, or the coverage statement may simply not apply outside its calibration
 distribution. **We have not tested this and make no claim about the answer** — we raise it
 because it is the question our harness is shaped to ask and theirs is shaped to answer.
-
-### DRIFT — *Derailing Denoising Trajectories of Flow-Matching VLAs with Adversarial Patch Attack*
-Tae, Lee (2026). arXiv:[2608.03207](https://arxiv.org/abs/2608.03207) · submitted 4 August 2026
-
-The paper this project should be pointing at rather than competing with. Flow-matching VLAs such as
-π0 had been reported to resist perturbations that fool autoregressive VLAs, and the authors state
-plainly what that reputation was made of: **"We show that this robustness is largely illusory: it
-stems from prior attacks ignoring the multi-step denoising ODE."** DRIFT is a test-time universal
-adversarial patch, placed on the robot's gripper, that attacks the denoising *velocity field* of an
-off-the-shelf policy. Its central result is the one that matters for a taxonomy: **"attacking only
-the first denoising step is both stronger and cheaper than attacking a wider window of steps"** —
-which the authors attribute to a gradient conflict specific to input-space optimization, and note is
-"exactly opposite to the training-time backdoor regime". On π0 and π0.5 across four LIBERO suites
-they report that DRIFT "breaks essentially all originally-solvable tasks with a small single patch,
-far exceeding action- and embedding-space attack baselines".
-
-**How we differ:** the threat model is adjacent to our `universal_patch` family — one frozen patch,
-placed physically, carried to episodes it never queried — and the method is not comparable at all.
-DRIFT is **white-box**: it optimises in input space against gradients of the velocity field. Ours is
-an inference-time **black-box query** search over placements, with no gradients and no access to
-model internals. A black-box search cannot find what DRIFT found, because the structure it exploits
-(which step of the ODE to hit) is invisible without the derivative.
-
-**The gap this exposes, stated rather than hedged:** **Provael has never measured a flow-matching
-policy.** The `pi0`, `pi05` and `pi0fast` adapters are registered and `provael list-policies` marks
-them scaffolding — they have never loaded a checkpoint. So DRIFT's finding is not a result we can
-confirm, contradict or contextualise with a number of our own, and until we can, the honest position
-is that this is a capability of theirs sitting on a class of policy we do not cover. The taxonomy
-implication is separately argued in [docs/top10-rfc.md](docs/top10-rfc.md); it is a proposal, not a
-change.
 
 ### SARF and AGSD — *Structure-Aware Robust Fine-Tuning: Defending Vision-Language-Action Robots Against Physical Attention Hijacking*
 Zhang, Yin, Yang, Yan, Tian, Yu (2026). arXiv:[2608.03231](https://arxiv.org/abs/2608.03231) · submitted 4 August 2026
@@ -725,9 +701,52 @@ arriving by a different route:
 
 Three independent groups have now published optimised patch attacks that far exceed our null on
 this channel. At that point the honest reading of 0/50 is not "the policy resisted" and not even
-"our implementation is weak on this instance" — it is that **provael has no image-space patch
+"our implementation is weak on this instance" — it is that **provael had no image-space patch
 attack**, and the visual family's nulls measure the absence of one. That is a coverage gap in the
 harness, stated as such. Both nulls stay published exactly as measured.
+
+**Update, 1 September 2026 — the gap is half closed, and it is worth being exact about which
+half.** `gradient_patch` (family `gradient_patch`, `attacker_access: white-box-gradient`) now ships:
+untargeted L-inf projected gradient ascent on the feature the action head consumes, using the
+policy's own input gradients. So the first clause above is no longer true — there IS an image-space
+gradient attack in the harness.
+
+The second clause still stands, and nothing here retires it. **The published 0/50 nulls were
+measured with `patch`, and they remain exactly what they were**: the result of a string-append
+fixture, not of this attack. `gradient_patch` has never run against SmolVLA × LIBERO, so no VLA
+number is claimed, and `applicable()` keeps the arm out of the ASR denominator wherever the
+gradient path is absent — a CPU run cannot report it as a null it never attempted.
+
+What it HAS been measured on is a different policy and a different task: **Diffusion Policy ×
+PushT**, n = 20 per condition on identical seeds. Task success went from 9/20 clean and **14/20
+under random L-inf noise** to **0/20 under the optimised perturbation at the same eps = 0.10
+budget** (exact McNemar vs the noise arm, p = 0.00012; mean target coverage 0.971 → 0.333). The
+noise arm is the load-bearing control: it establishes that the damage comes from the optimisation
+and not from the corruption, which is precisely the comparison the 0/50 nulls never made. Random
+noise at that budget slightly *helped* the policy, so the attack had to beat a control that was
+improving it.
+
+That is evidence about the METHOD, on a 2-D pushing task, against a policy with no language
+conditioning. It is not evidence about VLAs, about LIBERO, or about the arms this project
+publishes. Until `gradient_patch` runs on the GPU lane, the correct summary is: **the harness now
+has the attack it was missing, and has not yet pointed it at the policy the nulls were measured
+on.**
+
+**Their mechanism finding, kept because it is the transferable part.** The authors attribute the
+first-step result to a gradient conflict specific to input-space optimization, and note it is
+"exactly opposite to the training-time backdoor regime". That is a claim about where to spend a
+gradient budget, and it survives independently of whether anyone reproduces the headline.
+
+**The gap, stated at its true width.** This register carried a second copy of this entry until
+31 August 2026, and that copy asserted **"Provael has never measured a flow-matching policy"**.
+That was wrong, and wrong in the direction that excuses us: `lerobot_adapter.py` declares
+`action_head_class = "flow"` and all 400 episodes of the pinned ten-task evidence record `flow`, so
+SmolVLA is a flow-matching policy by this project's own taxonomy and we have measured one. The real
+gap is narrower and less comfortable — provael has not measured **π0 or π0.5**, the specific
+checkpoints DRIFT attacks; `provael list-policies` marks `pi0`, `pi05` and `pi0fast` as having no
+run committed. So the architecture explanation stays unavailable, and what is missing is a
+checkpoint, not a policy class. The taxonomy implication is argued separately in
+[docs/top10-rfc.md](docs/top10-rfc.md); it is a proposal, not a change.
 
 **What neither side can currently check.** DRIFT reports no benign false-positive rate on shared
 fixtures, and ours is uncalibrated ([#136](https://github.com/provael/provael/issues/136)) — the
@@ -935,8 +954,11 @@ done.
 **Where we are weaker.** Six policies against our one measured. An optimisation loop that searches
 the risk-factor state against our fixed four-template banks. A shipped, evaluated defense against our
 two measured mitigations. And a physical-safety taxonomy with three cost types grounded in risk
-predicates, against an envelope predicate that is **uncalibrated** — `provael calibrate` has never
-run on LIBERO. What we carry that their reported setup does not surface is a matched benign control
+predicates, against an envelope predicate that is **uncalibrated**. `provael calibrate` has since run
+on LIBERO — ten `libero_object` fits, 6 September 2026 — and the predicate is still uncalibrated,
+because those fits were withheld rather than adopted: the fitted hazard face flagged 0 of 12 attacked
+episodes (see [`studies/keepout_face_selection/`](https://github.com/provael/provael/blob/main/studies/keepout_face_selection/README.md),
+issue #136). What we carry that their reported setup does not surface is a matched benign control
 at the same `(task, seed)` cell with a reported false-positive rate.
 
 **mapping_status: `cited, not crosswalked`.** Their attack acts on the scene with the instruction
@@ -1143,7 +1165,7 @@ for rather than a preference:
   finding is the argument for that, and it is the argument against the version of this project that
   reported a bare percentage.
 - The two measured nulls stay in the table at **0/50 (`injection`) and 0/100 (`visual`)** rather
-  than being dropped. Only three of the sixteen adversarial families in the registry have run
+  than being dropped. Only three of the seventeen adversarial families in the registry have run
   against a real policy at all, and **two of those three returned zero** — so a board that quietly
   shed its zeros would be reporting a selected subset of an already small sample.
 
@@ -1195,12 +1217,48 @@ not in coverage, and it is not fixed by adding an attack.
 Neither is implemented and neither is covered. They are recorded because they change what our
 number means, which is a different reason from the one most entries above are here for.
 
+### ESTI — *Breaking Planner Integrity Boundary: Enviroment State-Text Injection Attack on LLM-Driven Embodied Agents*
+Jiawei Liu, Jiacheng Guo, Tian Zhang, Yiwei Xu, Juan Wang, Jinlin Fan, Bowen Xiao, Chi Guo,
+Keyan Guo, Hongxin Hu (2026).
+arXiv:[2608.16806](https://arxiv.org/abs/2608.16806) · v1 17 August 2026, v2 18 August 2026
+
+(The misspelling of "Environment" is the authors' own, in the published title. Quoted as printed
+so the string matches what a search returns.)
+
+**A different injection surface from ours.** ESTI writes adversarial text into the **environment
+state** an LLM-driven planner reads — object properties, spatial relations, affordances — rather
+than into the user instruction. The authors describe it as the first closed-loop attack fabricating
+"false state evidence compatible with the current environment" without touching the instruction or
+the model weights. Their abstract reports **improvements of up to 89.32% (planning-level) and
+43.69% (execution-level) attack success over prior methods** — improvements over baselines, not
+absolute rates, and stated here as reported rather than replicated.
+
+**Their separation of P-ASR from E-ASR is the transferable part.** A planner can be successfully
+misled and the manipulated plan still fail to execute; collapsing the two into one number would
+report a capability the robot does not have. That is the same distinction `endpoints.py` exists to
+protect, arrived at from a different architecture.
+
+**mapping_status: `partial`.** The injection surface maps onto **EAI01** (instruction and prompt
+integrity) and the planner/execution split onto **EAI05**. It does **not** map onto a runnable
+attack family here, and the reason is architectural rather than a matter of effort: ESTI targets a
+**planner-plus-executor** stack, where the attack lands on the text a planner reads. Our families
+target a **single end-to-end VLA policy**, which has no separate planner to mislead and no plan to
+corrupt between deciding and acting. Treating the two as equivalent would overstate our coverage by
+claiming a surface our threat model does not contain.
+
+**What they have that we do not:** a planner/executor decomposition of failure, so a partial
+compromise is visible as one.
+**What we have that they do not:** a benign control arm, so our rates carry a floor. An attack-side
+number without one cannot distinguish a policy the attack broke from a policy that was failing
+anyway.
+
 ### TOWN-VLA — *Think Only When Needed: Prompt-Authority Control for Selective Slow-Path Intervention in Vision-Language-Action Manipulation*
 Zhiruo Zhou, Zelin Li, Xiwen Chen, Jiazhuo Li, Chenwei Wang, Huiming Chen, Xiaojun Zhu (2026).
 arXiv:[2608.23224](https://arxiv.org/abs/2608.23224) · submitted 24 August 2026
 
 **The finding is more interesting than the fix, so take it first.** Retrieval-augmenting a frozen
-VLA is normally read as supplying *context*. Their framing is that it does not: retrieved text
+VLA — the audited base policy is **OpenVLA-OFT**, OpenVLA under the Optimized Fine-Tuning recipe,
+in LIBERO-Plus simulation — is normally read as supplying *context*. Their framing is that it does not: retrieved text
 "becomes a control intervention once it enters the executed prompt". The audit behind that sentence
 is worth quoting verbatim, because it is a **control** rather than a headline:
 
@@ -1242,6 +1300,258 @@ also **shortens** the prompt. The open question, and the concrete test that woul
 recorded in
 [the canonicalization study](docs/studies/instruction-canonicalization.md#prompt-form-vs-prompt-semantics-an-open-question-from-town-vla).
 We do not have the answer and this entry does not guess at one.
+
+### VLA-Risk — *Benchmarking Vision-Language-Action Models with Physical Robustness*
+OpenReview [31EjDFwFEe](https://openreview.net/forum?id=31EjDFwFEe) (2025).
+
+**Read from the public abstract only, and that limit is part of the entry.** OpenReview serves both
+its web and API paths behind a bot challenge, which this project does not bypass, so everything
+below comes from the abstract and listing metadata. Where their formalism would settle a question,
+this entry says so rather than guessing at it — the surrounding entries quote papers directly, and
+the difference in confidence should be visible rather than smoothed over.
+
+**What it covers.** 296 scenarios and 3,784 episodes, spanning simple manipulation, semantic
+reasoning and autonomous driving. Attacks are structured along two axes at once: the input modality
+perturbed (image and instruction) and three task dimensions — object, action, space.
+
+**Why it does not share a denominator with ours.** Two reasons, and only the first is certain from
+the abstract. Their reported outcome is degradation on the attack tasks — how much worse the policy
+does at the thing it was asked to do. Provael scores an **envelope breach**: whether the
+end-effector entered a keep-out region, whether or not the task succeeded. Those come apart in both
+directions. A policy can fail its task without leaving the envelope, which is incompetence rather
+than a safety event; and the committed run shows the other direction directly, with clean-task
+success averaging 84% while `roleplay` drove 44 of 50 matched pairs out of the envelope. The second
+reason is breadth: their scope includes autonomous driving, which provael does not touch at all.
+
+**Where we are weaker.** 296 scenarios against our ten `libero_object` tasks, and both an image and
+an instruction axis against our one measured family. Their episode count is an order of magnitude
+above our 350.
+
+**What we carry that the abstract does not surface.** A matched benign control at the same
+`(task, seed)` cell with a reported false-positive rate, and the interval around it.
+
+**mapping_status: `complementary, different failure definitions`.** No crosswalk is claimed. Their
+axis is task degradation under perturbation; ours is a spatial predicate under a fixed scene. A
+coverage table would imply a shared denominator that does not exist, and the abstract alone is not
+enough to build one honestly.
+
+### SAFE — *Multitask Failure Detection for Vision-Language-Action Models*
+Gu, Kim, Kuang, Sharma, et al. (2025) — NeurIPS 2025.
+arXiv:[2506.09937](https://arxiv.org/abs/2506.09937) · OpenReview
+[XPyAukgsFf](https://openreview.net/forum?id=XPyAukgsFf)
+
+**Detection, not elicitation, and listed for completeness rather than comparison.** SAFE reads a
+VLA's own internal features and predicts a scalar for how likely the current rollout is to fail,
+giving a timely enough alert that a robot can stop, backtrack or ask for help. It is trained on both
+successful and failed rollouts, evaluated on unseen tasks, calibrated with conformal prediction, and
+works across OpenVLA, π₀ and π₀-FAST.
+
+**There is no overlapping quantity.** Provael manufactures a failure and reports how often the
+attempt succeeds. SAFE observes a rollout it did not cause and reports whether it is going wrong.
+Neither number bounds the other, and a reader comparing an attack success rate to a detection rate
+is comparing an offense to a monitor.
+
+**Where it is genuinely relevant to us, and unmeasured.** SAFE is the shape of mitigation
+`provael mitigation` exists to score — a runtime monitor an operator could actually install, sitting
+between the policy and the robot. Nothing here has been run against it, and its multitask
+generalisation claim is the interesting one to test: a detector trained on benign task failures has
+no reason in principle to fire on an *adversarially redirected* rollout that is executing
+competently, just toward the wrong place. Whether it does is an open question and a run nobody has
+done.
+
+**mapping_status: `complementary, listed for completeness`.** No crosswalk, and no claim of
+superiority in either direction: it detects, we elicit.
+
+### Same Weights, Different Robot — *A Deployment Safety View of VLA Policies*
+Tai (2026). arXiv:[2606.03724](https://arxiv.org/abs/2606.03724)
+
+**This one names a defect in our artifact, not a difference of view.** The argument is that a VLA
+policy is not defined by its checkpoint: the same normalised model output becomes a different
+physical action once action unnormalisation and controller conventions are applied, so two
+deployments agreeing on weights, prompt and benchmark suite can still be *executable-inequivalent*.
+The author formalises this as an **executable policy specification** problem — the policy is the
+model plus the action representation plus the metadata-selected unnormaliser plus the
+controller-facing conventions — and measures action-space drift without running inference. On
+LIBERO-Goal a metadata mismatch takes success from 28/28 to 2/28, which is the whole thesis in one
+number: nothing about the checkpoint changed.
+
+**How we differ — we do not, and that is the point.** We have been treating the checkpoint as the
+unit under test. `RunReport` identifies a policy by weights hash and config hash, and records
+neither the unnormaliser resolved at load time nor the controller convention. So two Provael reports
+on "the same policy" can be reports on two different executable policies, and nothing in our schema
+would detect it. The determinism contract does not help: both runs are internally deterministic, and
+byte-identical report generation says nothing about which unnormaliser was picked.
+
+**Action for us.** The resolved unnormaliser and controller convention belong in the report as
+first-class fields, bound by digest the way `ExecutionManifest` already binds runtime provenance.
+Until that ships, a Provael report identifies the **checkpoint**, not the deployed policy, and
+`/results` should say so rather than wait for someone else to find it. Tracked as
+[#227](https://github.com/provael/provael/issues/227), which also records that adding report
+fields moves the attestation subject digest and is therefore a schema migration.
+
+**mapping_status: `cited, adopted as a schema requirement`.** Not a crosswalk: we are taking the
+framing, and the credit for it is his.
+
+### SafeManip — *A Property-Driven Benchmark for Temporal Safety Evaluation in Robotic Manipulation*
+Huang, Huynh, Elbaum, Kira, Feng (2026). arXiv:[2605.12386](https://arxiv.org/abs/2605.12386)
+
+Task success does not imply safe execution, and a large share of manipulation safety failures are
+**temporal**: touching a clean surface after contamination, releasing an object before it is fully
+inside an enclosure. SafeManip defines reusable safety templates over finite executions using
+**Linear Temporal Logic over finite traces (LTLf)**, maps rollouts to symbolic predicate traces, and
+evaluates them with LTLf monitors across eight categories — collision and contact safety, grasp
+stability, release stability, cross-contamination, action onset, mechanism recovery, object
+containment, and enclosure access.
+
+**How we differ — by being blind to the category.** Our safety predicates are point-in-time. A
+keep-out predicate asks whether the end effector entered a region; it cannot ask whether it entered
+*after* a contaminating event, and ordering is exactly what their eight categories are about. Every
+temporal property in their suite is invisible to `workspace.py` as it stands. Their
+LTLf-over-finite-traces formulation is also a better-specified version of what our predicates are
+informally reaching for, so there is nothing to defend here.
+
+**Action for us.** The predicate layer should accept an LTLf monitor, and their eight categories are
+the right first target set. Until it does, our keep-out numbers cover the **state-based subset** of
+manipulation safety and must be described that way. Calling them "safety" without that qualifier
+claims a coverage we do not have.
+
+**mapping_status: `cited, crosswalk pending`.**
+
+### No Free Checker — *A Survey of Verifiers for Robot Policies*
+Wan, Yue, Liu, Chu, Wang, Chen, Jiang, Zhu, Dong, Zhu (2026). arXiv:[2609.09250](https://arxiv.org/abs/2609.09250) · [reading list](https://github.com/ZJUSCL/Awesome-Robot-Verifier)
+
+Surveys roughly 150 verifiers for robot policies — success detectors, reward models, runtime
+monitors, safety filters, temporal-logic specifications — along two axes: **availability**, which
+rises as a verdict gets cheaper, earlier and denser, and **credibility**, which is how much a high
+score actually indicates task success. Their finding across all four families: *"credibility falls
+as availability rises."* There is no free checker.
+
+**Where we sit on their axes, and it is not flattering.** Our envelope predicate is a rule-based
+verifier over simulator state. On availability it scores high: cheap, per-step rather than per
+episode, available as often as the simulator runs. By their argument it therefore scores low on
+credibility, and we agree. The predicate is a proxy for harm, not harm, and it is gameable in the
+exact sense they mean — a policy tuned against it would look safe without being safe.
+
+**What we take from them.** Their framing is the sharpest available statement of why the benign
+control arm has to be *published* rather than netted off. A high-availability verifier has a nonzero
+false-positive rate by construction, so the control rate is the reader's only handle on how much of
+a reported number is the verifier rather than the policy. `benign_fpr` stays `float | None` and is
+**None when the arm has not run**, never 0.0 — an unrun control has demonstrated nothing, and
+collapsing the two would be exactly the credibility loss they describe.
+
+**How we differ.** The survey validates verifiers against each other and against task outcomes. We
+propose no better verifier. We propose that any verifier used to produce a published rate must ship
+the rate it produces on a matched no-attack control. That is a reporting requirement, orthogonal to
+their taxonomy rather than a contribution to it.
+
+**mapping_status: `cited, framing adopted`.**
+
+### LIBERO-Recover — *Beyond Task Success Towards Failure Recovery in Robotic Manipulation Models*
+Liu, Bao, Zhang, Song, Yang, Tao, Liu, Lu (2026). arXiv:[2609.05178](https://arxiv.org/abs/2609.05178)
+
+Near-perfect LIBERO scores are misleading, because existing benchmarks evaluate task completion from
+predefined initial states while real interaction involves failed grasps, collisions and unintended
+object movement. They build a benchmark of over a thousand recovery scenarios from real execution
+failures and measure whether a policy recognises and recovers.
+
+**Their argument and ours are the same argument from two sides.** They say a success rate measured
+only from clean initial states tells you nothing about robustness; we say an attack success rate
+measured without a matched benign arm tells you nothing about robustness either. Both are claims
+that the denominator is missing. Their recovery states are also a natural source of initial
+conditions for a benign control arm, because a benign rollout starting from a recoverable failure is
+precisely where a keep-out predicate is most likely to fire for reasons that are not the attack.
+
+**How we differ.** They measure whether a policy gets itself out of trouble; we measure whether an
+adversary can put it there, and at what rate relative to it arriving there unaided. Recovery versus
+induction. A policy can score well on one and badly on the other, which is the argument for
+reporting both rather than one robustness number.
+
+**mapping_status: `cited, crosswalk pending`.**
+
+### FailureSpot — *Label-Efficient Timestamp-Level Failure Detection for Vision-Language-Action Models*
+Ma, Liu, Zhu (2026). arXiv:[2609.04277](https://arxiv.org/abs/2609.04277)
+
+Proactive failure detectors trained on a VLA's internal representations are usually supervised with
+**trajectory-level** labels, which mislabels the normal pre-failure portion of an unsuccessful
+trajectory as abnormal, so the detector learns the wrong boundary. They supervise at the timestamp
+level instead, using weak supervision from action patterns plus active learning to keep annotation
+cost down.
+
+**Why this is a defect report and not a citation.** Our own scoring carries the same shape of error.
+A run is scored adversarially-induced or not at the **episode** level, so every step before the
+divergence sits on the adversarial side of the ledger. Any detector-style precision we quote off
+that labelling is optimistic by an amount we have not measured, and we should not quote one until
+the divergence timestamp is recorded.
+
+**How we differ.** FailureSpot is a detection *method*; the benign-control arm is a measurement
+*convention*. They are orthogonal, and their result does not support ours. What it does is tell us
+our label boundary is in the wrong place.
+
+**mapping_status: `cited, defect acknowledged`.** We have not reimplemented their label-efficient
+supervision and claim nothing of the sort.
+
+### R2S-Eval — *Robot Evaluation with Real-to-Sim Calibration via Vision-Language Models*
+Wang, Ruan, Chen, Yin, Yu, Xu, Zhang (2026). arXiv:[2609.03276](https://arxiv.org/abs/2609.03276)
+
+Real-world policy evaluation is labour-intensive, unstable, and *"may produce different policy
+rankings across repeated evaluations"*, while success rate alone says little about execution
+quality. They calibrate a simulator against real observations and evaluate in the calibrated
+simulator instead of repeating hardware trials.
+
+**Why it is load-bearing for us specifically.** Every number we publish is simulation-only and the
+README's first limitation says so. The assumed fix has been hardware we do not have. This describes
+a third route: calibrate against a small set of real observations rather than run the campaign on
+hardware.
+
+**The honest counterpoint, which cuts against us.** The same paper reports that repeated real-world
+evaluation produces unstable rankings. If real rankings are unstable, then a sim-only result
+agreeing with a real result *once* is weaker evidence than it looks — which argues for more caution
+about any eventual first hardware number, not less. We also do not know whether a calibration fitted
+under nominal conditions survives adversarial input, which is the only case we care about. An
+unanswered question, recorded as one.
+
+**mapping_status: `cited, not implemented, roadmap-relevant`.** We have run no calibration and claim
+no result.
+
+### Drive the Thoughts — *Runtime Monitoring of VLA Reasoning-Trajectory Consistency*
+Yu, Feng, Elbaum (2026). arXiv:[2608.29583](https://arxiv.org/abs/2608.29583)
+
+A VLA in an autonomous-vehicle stack emits an explicit chain-of-thought alongside its trajectory, so
+the CoT is a specification the trajectory can be checked against at runtime without ground truth.
+They build DriveAlignBench from 150 annotated CoT-trajectory pairs on NVIDIA's Alpamayo 1.5, find
+33.3% of CoTs unreliable and the trajectory consistent with the CoT in 74% of the reliable cases,
+and reach F1 = 0.75 with an automated monitor.
+
+**Where it sits in our taxonomy, and why the line matters.** This is a runtime **monitor**, not an
+evaluation **metric**. A monitor runs in deployment and can intervene; a metric runs offline and
+produces a number for comparison. This harness is entirely the second kind. Collapsing the two is
+how "we measured robustness" becomes "we made it safe", which is a claim we do not make and this
+file exists partly to keep us from drifting into.
+
+**What it implies for our attack families.** A perturbation that moves the trajectory without moving
+the CoT would defeat a consistency monitor by construction, and we have not tested that. Open
+question we cannot answer: their setting is driving, where a trajectory is low-dimensional, and
+whether CoT-trajectory consistency is checkable at all for a 7-DoF manipulator is unclear to us.
+
+**mapping_status: `cited, taxonomy only, not implemented`.**
+
+### FolDeX — *A Physical-World Benchmark for Long-Horizon Robotic Manipulation of Deformable Objects*
+Liu, Xu, Wu, Wang, Kuai, Ding, Wang, Liu, Gao, Zhang (2026). arXiv:[2609.10243](https://arxiv.org/abs/2609.10243)
+
+A real-robot garment-folding benchmark: over 2,000 hours of real-robot data across 20+ tasks and 10+
+embodiments, built on the observation that *"methods that perform well in simulation can degrade
+substantially on real robots, especially in long-horizon deformable-object manipulation."*
+
+**Cited against ourselves, deliberately.** Our own position is that sim-only results must not be
+read as transfer claims. That argument is stronger carrying an independent real-robot benchmark
+saying the same thing than carrying only our own caution. Our attack families are rigid-object,
+short-horizon and simulated; on their framing that is the easy end of the space, and we have no
+deformable or long-horizon results at all.
+
+**What it does not license.** It is not evidence about how any of our families would behave on
+hardware. It is evidence that the question is open and that the burden is ours.
+
+**mapping_status: `cited, external evidence, not implemented`.**
 
 ## What is actually novel here
 

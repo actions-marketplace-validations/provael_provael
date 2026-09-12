@@ -5,6 +5,17 @@ from this page once added — an erratum that disappears is worse than the error
 
 If you hold a Provael artifact, check here before relying on a regulatory date in it.
 
+**On the numbering.** IDs are one shared space across this document and the mirror at
+[provael.com/errata](https://www.provael.com/errata), and this document is the maintained source.
+E-2026-06 and E-2026-07 were raised on 6 September 2026 against website surfaces and recorded only
+on the mirror; they are back-filled here so the two agree entry-for-entry.
+
+**E-2026-07 and E-2026-05 are the same correction under two IDs.** Both record that ISO 10218:2025
+does not defer its cybersecurity detail to IEC 62443 — 05 against two repository documents, 07
+against four website pages, raised five days apart. Issuing a second ID was the mistake, and it is
+not fixable: both are published, and this page is append-only. So the duplication is stated rather
+than renumbered, and E-2026-09 is the next free ID.
+
 ---
 
 ## E-2026-01 — Signed attestations carry a superseded EU AI Act application date
@@ -134,3 +145,383 @@ every tracked file and fails the build on any 16-hex value following the token `
 published key does not derive to — the same single-source discipline the family counts and
 version pins already have. A future rotation that forgets the docs now fails CI instead of
 waiting for a reader to find the contradiction.
+
+---
+
+## E-2026-03 — Two READMEs published a zero-width confidence interval for three null arms
+
+**Status:** corrected in the tool and on both surfaces · the signed board and its signature were correct throughout
+**Date raised:** 30 August 2026
+**Window:** 9 August 2026 (#110 and #113, first publication) to 30 August 2026 (#157, this correction) — 21 days
+**Affects:** `README.md` and `results/smolvla_libero_object_suite/README.md` as published in that window. No signed artifact is affected.
+
+### What was wrong
+
+Both READMEs published the task-clustered 95% confidence interval for the three null arms
+(`patch`, `decoy_object`, `scene_text`, each 0/50) as:
+
+```
+[0%, 0%]
+```
+
+A zero-width interval states that the true rate is known exactly. It is not: the arms are null
+because nothing succeeded in fifty attempts, which is a very different claim from a rate of
+precisely zero.
+
+The mechanism was a guard that checked a proxy. `provael.scoring.paired.cluster_bootstrap_ci`
+already refused to answer below two tasks, and the reasoning recorded beside that refusal was
+correct — a bootstrap over one task resamples the same thing every time and returns a zero-width
+interval carrying no information. But the guard counted **clusters**, not the interval it produced.
+Ten tasks that all score zero pass a cluster count and are just as degenerate: every resample
+returns the same rate, so the percentiles collapse onto it.
+
+Worse for a reader trying to check the work, the project contradicted itself in public.
+provael.com published a **non-zero** upper bound for those same three 0/50 results throughout.
+Same dataset, two Provael surfaces, incompatible claims.
+
+### What is correct
+
+| Arm | n | Superseded value | Correct value |
+| --- | ---: | --- | --- |
+| `patch` | 0/50 | `[0%, 0%]` | **no clustered interval** — the bootstrap declines |
+| `decoy_object` | 0/50 | `[0%, 0%]` | **no clustered interval** — the bootstrap declines |
+| `scene_text` | 0/50 | `[0%, 0%]` | **no clustered interval** — the bootstrap declines |
+
+Both tables now render `—` for these arms and say why. Pooled as a plain binomial rather than
+clustered, 0/50 is consistent with a true rate as high as **7.1%** (exact 95% upper bound), and the
+corrected prose states that figure so the reader is left with a bound rather than nothing.
+
+Declining is the right answer rather than a gap to be filled: a caller that receives no interval
+must fall back to a bound that stays honest, where one that receives `[0%, 0%]` will print it.
+
+### What this does and does not affect
+
+**No signed artifact is affected, and no signature verdict was ever wrong.** The published
+leaderboard carries **Wilson** intervals, not the clustered bootstrap, and has always recorded
+`[0.0%, 7.1%]` for the 0/50 injection row and `[0.0%, 3.7%]` for the 0/100 visual row. Attestation
+bundles are likewise unaffected. The defect lived only in two hand-maintained Markdown tables.
+
+**No measured result changes.** The rates, denominators, McNemar p-values and Holm-adjusted values
+in those tables were correct. Only the interval column was wrong, and only for the three arms whose
+rate is zero.
+
+**What does change** is how strong those three nulls look. A reader taking `[0%, 0%]` at face value
+would conclude the attack had been shown to have no effect. The measurement supports only that it
+was not observed to succeed in fifty attempts, which leaves a true rate of up to 7.1% on the table —
+and 7.1% of a keep-out violation is not nothing.
+
+### How to tell whether a copy you hold is affected
+
+Search it:
+
+```bash
+grep -n '\[0%, 0%\]' README.md results/smolvla_libero_object_suite/README.md
+```
+
+Any match outside the paragraph explaining this correction predates the fix.
+
+### What was changed to prevent recurrence
+
+`cluster_bootstrap_ci` now guards **the interval it computed** rather than the shape of its input:
+if the lower and upper bounds are equal it returns nothing, whatever the cluster count.
+`tests/test_paired.py` pins that with an all-zero and an all-success sweep, and
+`test_bootstrap_still_answers_when_one_task_differs` keeps the refusal narrow — one dissenting task
+is a real measurement and must not be declined.
+
+The second guard is the one that earned its place. Because these tables are hand-maintained and
+`cluster_bootstrap_ci` has no caller in `src/`, fixing the function would never have corrected a
+published number. `tests/test_no_zero_width_intervals.py` scans tracked Markdown for a degenerate
+interval in a table row, and **on its first run it found the second copy under `results/` that the
+first fix had missed**. It carries `test_the_guard_can_actually_fail`, which pins the regex against
+the exact row that shipped, so it cannot quietly stop matching.
+
+---
+
+## E-2026-04 — The CRA severe-incident final report was published with the wrong start point
+
+**Status:** corrected on provael.com and in its machine-readable clock · no signed artifact is affected
+**Date raised:** 1 September 2026
+**Window:** 25 August 2026 (#86, first publication of the Article 14 sub-deadlines) to 1 September 2026 — 7 days
+**Affects:** `provael.com/regulatory-clock` and `/regulatory-clock.json` as published in that window. Nothing in this repository, and no attestation bundle, carried the defect.
+
+### What was wrong
+
+The CRA Article 14 reporting clock published both of its final-report deadlines as a single row:
+
+```
+Final report, due once a corrective or mitigating measure is available
+  — 14 days for an actively exploited vulnerability, one month for a severe incident.
+```
+
+The start point named in that sentence is correct for the vulnerability branch and **wrong for the
+incident branch**.
+
+### What is correct
+
+Article 14(2)(c) and Article 14(4)(c) measure from different events:
+
+| Branch | Deadline | Runs from |
+| --- | --- | --- |
+| Actively exploited vulnerability, Art. 14(2)(c) | 14 days | after a corrective or mitigating measure **is available** |
+| Severe incident, Art. 14(4)(c) | one month | after **submission of the 72-hour incident notification** under Art. 14(4)(b) |
+
+The incident clock does not wait for a fix at all. Collapsing both into one sentence applied the
+first branch's anchor to the second, which points a reader at a later start than the regulation
+allows.
+
+### What this does and does not affect
+
+**No measured result, signed artifact or attestation is affected.** The defect was in a regulatory
+date rendered on the website, not in any number this tool produces, and not in any payload it signs.
+
+**The 24-hour, 72-hour and 14-day figures were correct throughout.** Only the anchor for the
+one-month incident deadline was wrong.
+
+**What does change** is a runbook. A reader who took the superseded wording at face value would wait
+for a corrective measure before starting the one-month count — a count that had already been running
+since their own 72-hour filing.
+
+### How to tell whether a copy you hold is affected
+
+```bash
+curl -s https://www.provael.com/regulatory-clock.json \
+  | jq '.entries[] | select(.id == "eu-cyber-resilience-act") | .reportingSubDeadlines'
+```
+
+Three sub-deadlines rather than four, with no `one month` row, means the copy predates this
+correction.
+
+### What was changed to prevent recurrence
+
+The two branches are now separate rows carrying their own anchors, and the clock entry's
+`reportingSubDeadlinesSource` was moved from the Commission's CRA summary to the OJ text on
+EUR-Lex. That is the reusable lesson: the sub-deadlines had been transcribed from a **secondary
+summary**, whose phrasing does not carry the distinction the regulation makes. A secondary source is
+fine for finding a fact and not for pinning one.
+
+The entry also now records Article 69(3) — the express derogation from 69(2) that puts the entire
+in-scope installed base under Article 14 reporting while leaving it outside the product
+requirements, which is the clause most often missed.
+
+
+---
+
+## E-2026-05 — Two documents said ISO 10218:2025 defers its cyber detail to IEC 62443
+
+**Status:** corrected in the repository · no signed artifact is affected
+**Date raised:** 6 September 2026
+**Affects:** `docs/compliance/machinery-annex-i-part-a.md` and `docs/crosswalk/halos-integrator.md`, plus the `iso-10218-2` assurance profile's description in `docs/attestation.md` and its docstring in `src/provael/assurance.py`. No emitted artifact carried the claim: the OSCAL, SARIF and attestation payloads name the two standards as separate mappings and always did.
+
+### What was wrong
+
+Two documents stated that ISO 10218-1/-2:2025 hands its detailed cyber requirements to IEC 62443:
+
+```
+ISO 10218-1/-2:2025 cyber (which defers detailed cyber requirements to IEC 62443)
+ISO 10218-1/-2:2025 (cyber clauses, deferring detail to IEC 62443)
+```
+
+Two more places described Provael's own IEC 62443 SL2 view as something ISO 10218 routes to, rather
+than as a mapping Provael chose to publish.
+
+### What is correct
+
+Read on the ISO Online Browsing Platform, **Clause 2 Normative references** of ISO 10218-1:2025
+lists ISO 3864-x, ISO 4413/4414, ISO 7010, ISO 9283, ISO 12100, ISO 13732-x, ISO 13849-1:2023,
+ISO 13850, ISO 14118/14119/14120, ISO 19353, ISO 20607, ISO 20643 and IEC 60073. It contains no
+IEC 62443 and no IEC TR 63074.
+
+IEC 62443 appears in the **Bibliography**, which is informative, alongside IEC TR 63074.
+
+What the standard's own Foreword does say, and what this repository now says instead:
+
+```
+The main changes are as follows: [...] adding requirements for cybersecurity to the
+extent that it applies to industrial robot safety;
+```
+
+So the 2025 revision does add cybersecurity requirements. It does not delegate them. Provael's
+crosswalk to IEC 62443 is Provael's, and an assessor inherits nothing from ISO 10218 by reading it.
+
+### What this does and does not affect
+
+Nothing signed, and nothing machine-readable. The control identifiers, the `iec-62443:slv`
+requirement key and the emitted `routes_to` field are unchanged, because they are a published
+contract that consumers parse and because they were never the thing that was wrong. The defect was
+prose describing a relationship between two standards.
+
+The `iso-10218-2` and `iec-62443` assurance profiles both remain. A crosswalk to IEC 62443 is a
+legitimate thing to publish; presenting it as inherited from ISO 10218 was not.
+
+### What was changed to prevent recurrence
+
+The replacement wording states the provenance rather than the relationship: the 2025 revision adds
+cybersecurity requirements to the extent they apply to industrial robot safety, names IEC 62443 in
+an informative Bibliography, and Provael's mapping is separate and is Provael's.
+
+The reusable lesson is the same one E-2026-04 recorded, one level up. That entry was about pinning
+a sub-deadline to a secondary summary instead of the OJ text. This one is about a standards
+*relationship* taken from secondary description rather than from the standard's own Clause 2. The
+stronger version in circulation, "ISO 10218 requires IEC 62443 SL2", is wrong, and a claim an
+assessor can falsify by opening Clause 2 costs more than any count on this site.
+
+---
+
+## E-2026-06 — A correction to the CRA sub-deadline source was reverted while fixing a link label
+
+**Status:** restored the same day · the four deadlines themselves were correct throughout
+**Date raised:** 6 September 2026
+**Affects:** provael.com/regulatory-clock, /regulatory-clock.json and
+/compliance/cra-incident-reporting, as published for roughly seven hours on 6 September 2026. No
+deadline, no measured result and no signed artifact is affected.
+
+### What is wrong
+
+The CRA Article 14 sub-deadlines were published citing the Commission's CRA summary as their source.
+That is the document [E-2026-04](#e-2026-04--the-cra-severe-incident-final-report-was-published-with-the-wrong-start-point)
+moved them **off**, five days earlier, because its phrasing does not carry the distinction the four
+rows encode — the two final reports run from different events.
+
+The rows on the page were correct the whole time. What was wrong was the citation under them: a
+reader checking the deadlines against the cited source would not have found the distinction there,
+and could reasonably have concluded the page had invented it.
+
+### Why it stopped being true
+
+`/compliance/cra-incident-reporting` closed with two source links carrying different labels and the
+same URL — "Regulation (EU) 2024/2847 on EUR-Lex" and "Commission CRA summary" both pointing at the
+Official Journal. That is a real defect, and it was fixed by moving the URL to match the label. **The
+label was the wrong half.** The link text lived in markup on two pages while the URL lived in JSON,
+so the two were editable apart and neither one carried the reason the other existed. Nothing was red.
+
+### What is correct
+
+| Field | Superseded value | Correct value |
+| --- | --- | --- |
+| `reportingSubDeadlinesSource` | `https://digital-strategy.ec.europa.eu/en/policies/cra-reporting` | **`https://eur-lex.europa.eu/eli/reg/2024/2847/oj`** |
+
+### What a reader should do
+
+Nothing to re-check in a runbook: the 24-hour, 72-hour, 14-day and one-month deadlines and their
+start points are unchanged and were correct throughout. If you cited this page's source link rather
+than the deadlines, cite Article 14 of the Official Journal text instead. The link label now travels
+in the clock data beside the URL so the two cannot be edited apart, and the website's
+`scripts/check-clock-sources.mjs` fails the build if a sub-deadline is ever pinned to a summary of
+the instrument rather than the instrument.
+
+---
+
+## E-2026-07 — Four website surfaces said ISO 10218:2025 defers its cyber detail to IEC 62443
+
+**Status:** corrected on every surface · the phrasings are now blocked by the website build
+**Date raised:** 6 September 2026
+**Affects:** provael.com/compliance/iso-10218, /defenses, /compare/physical-ai-safety-stacks and
+/regulatory-clock (with its JSON), as published up to 6 September 2026. No measured result and no
+signed artifact is affected: the control identifiers, the `iec-62443` requirement key and the emitted
+`routes_to` field are a published contract and were never the thing that was wrong.
+
+**This is the same correction as [E-2026-05](#e-2026-05--two-documents-said-iso-102182025-defers-its-cyber-detail-to-iec-62443),
+under a second ID.** 05 records it against two repository documents; this records it against four
+website pages, raised five days later. Issuing a second ID was a mistake, and both are published on
+an append-only page, so it is recorded rather than renumbered.
+
+### What is wrong
+
+Four pages stated that the 2025 revision of ISO 10218 introduces cybersecurity clauses and hands the
+detailed requirements to the IEC 62443 series. It does not. Clause 2, *Normative references*, of
+ISO 10218-1:2025 lists ISO 3864-x, ISO 4413/4414, ISO 7010, ISO 9283, ISO 12100, ISO 13732-x,
+ISO 13849-1:2023, ISO 13850, ISO 14118/14119/14120, ISO 19353, ISO 20607, ISO 20643 and IEC 60073.
+IEC 62443 is not among them; it appears in the informative Bibliography, alongside IEC TR 63074.
+
+The standard's own Foreword says the revision adds "requirements for cybersecurity to the extent
+that it applies to industrial robot safety" — it **adds** them, it does not delegate them.
+
+### Why it stopped being true
+
+The claim is a common secondary-source summary of what the 2025 revision did, and it was transcribed
+rather than read against the standard. It then spread by being restated: one phrasing in a compliance
+catalogue, a second in a defenses table, a third in a comparison page's answer, a fourth in the
+machine-readable clock. Provael's own mapping onto an IEC 62443 SL2 target is legitimate and stays;
+presenting it as something ISO 10218 routes to was not.
+
+### What is correct
+
+| Field | Superseded value | Correct value |
+| --- | --- | --- |
+| ISO 10218-1/-2:2025, relationship to IEC 62443 | introduces cybersecurity clauses and defers the detailed requirements to IEC 62443 | **adds cybersecurity requirements to the extent they apply to industrial robot safety; IEC 62443 appears only in the informative Bibliography** |
+
+### What a reader should do
+
+If you were treating a Provael IEC 62443 view as inherited from ISO 10218, it is not: an assessor
+reading ISO 10218 inherits nothing about IEC 62443, and the cyber requirements are in the document
+they already hold. The four superseded phrasings are in the website build's forbidden-string list, so
+none of them can be reintroduced on any page.
+
+
+---
+
+## E-2026-08 — A calibration's 0.0 benign false-positive rate was published as evidence of a well-placed boundary
+
+**Status:** the figure is accurate · what it was offered as evidence for is corrected here · the
+predicate it describes was never adopted, so no measured result changes
+**Date raised:** 8 September 2026
+**Affects:** the `[0.40.0]` CHANGELOG entry and the commit message of PR #212, as published from
+6 September 2026. **No published rate moves.** The 44/50 roleplay headline, its task-clustered
+interval, and the 2/50 benign control are all unchanged, because these calibrations were never
+adopted — `CALIBRATED_ZONES` was empty then and is empty now.
+
+### What is wrong
+
+Ten per-task keep-out calibrations for `libero_object` were published on 6 September with the
+statement that all ten achieved **a held-out benign false-positive rate of 0.0** against a 0.05
+target. The number is correct. It was presented as the notable property of the fit, under a
+heading announcing the run that issues #136 and #171 had been blocked on.
+
+It is not a notable property. It is what nearly any placement of that hazard box achieves.
+
+`fit_spatial_zone` searched the **gap** between the benign envelope and the hazard box, and took
+the *face* from a default argument. A hazard box is disjoint from the benign workspace by
+construction, so every gap large enough to clear the envelope drives the benign rate to or near
+zero. Replaying the one committed real-model run that records trajectories against all six
+candidate faces — task `libero_object/0`, 14 episodes, six attacks across three families:
+
+| hazard face | benign fires | attacked fires |
+| --- | --- | --- |
+| `x+` | 0/2 | **5/12** |
+| `y-` — the face the fitter always used | 0/2 | **0/12** |
+| the other four | 0/2 | 0/12 |
+| the shipped default box | 0/2 | 4/12 |
+
+**Five of the six faces give the same 0.0 benign rate, and five of the six catch nothing.** A
+figure that five wrong answers also achieve cannot be evidence that the sixth is right.
+
+The published entry did carry a caveat — that a 0.0 benign rate "says nothing about whether the
+zone still catches a redirected policy" — and that caveat was correct. This erratum is that the
+caveat was the finding, and it was filed under a heading that read as an achievement.
+
+### What is correct
+
+| Claim | As published | Correct |
+| --- | --- | --- |
+| ten calibrations at 0.0 benign FPR | the notable property of the fit | the property of almost any placement; five of six candidate faces score the same |
+| detection by the fitted zone | not stated | **0 of 12** attacked episodes on the one task with data |
+| relative to the uncalibrated default box | implied improvement | strictly worse — the default box flags 4 of 12 |
+
+### What this does and does not affect
+
+**No published number moves.** These zones were never adopted. Every rate Provael has published for
+`libero_object` was measured against the documented default box, `provael doctor` has reported
+`calibrated zones none` throughout, and every run report and execution manifest records
+`calibrated: false`. www.provael.com describes the predicate as uncalibrated on every page that
+renders the result, and that description was and remains accurate.
+
+**Signatures are unaffected.** No attestation payload carries a calibration.
+
+### What a reader should do
+
+If you cited the ten calibrations as evidence that Provael's keep-out predicate is now fitted, it is
+not, and the tool has never claimed otherwise at runtime. If you were planning to adopt them, do
+not: `studies/keepout_face_selection/` has the replay, and `provael calibrate --attack <name>`
+(0.41.0 and later) is the path to a fit whose face is chosen against attacked rollouts rather than
+assumed. Issue #136 stays open with these numbers.
+

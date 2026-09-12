@@ -40,7 +40,7 @@ The board is one run, and it is old. Stated plainly, because the rendered page n
 - **1 policy, 1 suite.** `smolvla` × `libero_object/0`. Seven of the eight registered policy
   backends have never produced a board row, and three of those (`groot`, `openvla`, `openpi`) have
   never loaded a checkpoint at all — `provael list-policies` marks them `scaffolding`.
-- **3 of 16 adversarial families measured** (`instruction`, `injection`, `visual`). **The other
+- **3 of 17 adversarial families measured** (`instruction`, `injection`, `visual`). **The other
   twelve have no real-model measurement whatsoever.** They are *absent* from the board, which is
   not the same as scoring 0% — an absent family is `N/A`, and reading it as a pass is the single
   most likely way to misuse this page.
@@ -87,12 +87,18 @@ the aggregated input reports** (the same digest approach as [attestation](attest
 and an attestation speak one integrity language). The date and commit are a snapshot stamp; the
 `inputs_digest` and the row numbers are what reproduce.
 
+The source directory is **`results/smolvla_libero_object_suite`** — the ten-task suite. It is not
+`results/smolvla_libero_object`, which is an older single-task run measured with **0.1.0**;
+rebuilding from that one produces a different digest, different rows, and a board 31 minor versions
+behind the published one. Both directories are committed and their names differ by one word, which
+is why this says so rather than leaving it to be inferred.
+
 ```bash
 # Build the real board (stamps date + commit + inputs digest)
-provael leaderboard build --real results/smolvla_libero_object --out leaderboard/results
+provael leaderboard build --real results/smolvla_libero_object_suite --out leaderboard/results
 
 # Reproduce: rebuild and confirm the digest matches
-provael leaderboard build --real results/smolvla_libero_object --out /tmp/rebuild
+provael leaderboard build --real results/smolvla_libero_object_suite --out /tmp/rebuild
 python -c "import json; a=json.load(open('leaderboard/results/leaderboard.json'))['inputs_digest']; \
 b=json.load(open('/tmp/rebuild/leaderboard.json'))['inputs_digest']; print('match:', a==b)"
 ```
@@ -223,7 +229,7 @@ days** — re-stamping is a GPU-free one-command operation, so the cost of stayi
 Rebuild and re-sign:
 
 ```bash
-provael leaderboard build --real results/smolvla_libero_object --sign --key provael-ed25519.pem \
+provael leaderboard build --real results/smolvla_libero_object_suite --sign --key provael-ed25519.pem \
     --out leaderboard/results
 provael leaderboard verify --in leaderboard/results/leaderboard.json --pubkey leaderboard.pub
 ```

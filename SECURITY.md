@@ -46,6 +46,37 @@ A machine-readable **security.txt** ([RFC 9116](https://www.rfc-editor.org/rfc/r
   and coordinate public disclosure (with credit) within 90 days of your report. If a fix ships
   earlier we disclose earlier; if more time is genuinely required we'll agree it with you.
 
+## Regulatory context, stated so you know what we are and are not
+
+Provael is open-source software published by an open-source steward. It is not a product with
+digital elements placed on the EU market by a manufacturer.
+
+Under the EU Cyber Resilience Act, the reporting obligations for manufacturers apply **from
+11 September 2026**: an early warning within 24 hours of becoming aware of an actively exploited
+vulnerability or severe incident, a full notification within 72 hours, and a final report no later
+than 14 days after a corrective measure is available, or within a month of the 72-hour notification
+for a severe incident. Reporting runs through the ENISA Single Reporting Platform.
+
+Open-source software stewards are subject to their own reporting obligation under **Article 24(3)
+only from 11 December 2027**, per Article 71(2). Source: [European Commission, Cyber Resilience Act
+reporting obligations](https://digital-strategy.ec.europa.eu/en/policies/cra-reporting), verified
+12 September 2026.
+
+So the 24-hour early-warning duty **does not bind this project today**. The timeline above is
+published now anyway, for two reasons: a disclosure policy written under deadline pressure is worse
+than one written without it, and anyone integrating this harness into a product that *is* in scope
+needs to know what they can expect from upstream.
+
+### If you are a manufacturer in scope
+
+If an actively exploited vulnerability in Provael contributes to a reportable incident on your
+product, mail **hello@provael.com** with **REPORTABLE** in the subject line. We will treat it as an
+acknowledge-within-24-hours case and give you what we know in writing, whether or not we agree the
+vulnerability is ours. That is a tighter commitment than the ordinary timeline above, and it is
+scoped deliberately: it exists so your 24-hour clock is not spent waiting on us.
+
+We are not your CSIRT and cannot report on your behalf. The notification duty is yours.
+
 ## Scope notes
 
 - The core installs no GPU/ML stack and makes no network calls; real policies and the LIBERO
@@ -72,3 +103,47 @@ vulnerabilities in Provael**, and the core install (6 deps, no GPU/ML stack) is 
   safetensors + JSON) — require auth/mTLS on the PolicyServer and upgrade once a fixed release is
   verified against the `smolvla_libero` path. Pinning Provael's extra to that fixed release is a
   tracked follow-up (the `smolvla_libero` glue is verified only against `0.5.1` today).
+
+## Scope under the EU Cyber Resilience Act
+
+Regulation (EU) 2024/2847. Article 14 reporting obligations apply from **11 September 2026**;
+the Regulation applies in full from 11 December 2027.
+
+Two different questions get asked here, and they have different answers.
+
+### Does the CRA place obligations on this repository?
+
+We have not taken legal advice, and we are not going to publish a scope conclusion we cannot
+back. What we can state is the test and the facts.
+
+The test for manufacturer obligations is whether a product with digital elements is made
+available on the EU market **in the course of a commercial activity**. Free and open-source
+software supplied outside a commercial activity is not in scope.
+
+The facts, as of 5 September 2026:
+
+- `provael` is Apache-2.0 and published free on PyPI and GitHub.
+- Paid assessment services are offered against it, at listed prices.
+- Nothing has sold. Zero customers, zero revenue.
+- There is no legal entity. The project is maintained by one natural person.
+
+Whether offering paid services alongside freely-licensed software makes that software
+"supplied in the course of a commercial activity" is the open question, and it is not one this
+project gets to settle by asserting an answer in its own security policy.
+
+The **open-source software steward** route is cleaner, because it turns on a checkable fact
+rather than a judgement. A steward under Article 3(14) must be a *legal person*. There is no
+entity here, so the Article 24 steward obligations — which also begin on 11 September 2026 —
+do not attach on that basis. If an entity is incorporated, this section changes with it.
+
+### Does the CRA place obligations on you, if you integrate Provael?
+
+If your product is in CRA scope, the reporting duty is yours. Provael does not discharge it and
+does not emit a CRA notification. What it can evidence is one narrow thing: whether a learned
+policy behaves unsafely under adversarial instruction or observation, measured with a control
+arm. Open a discussion and we will make the handoff explicit rather than leave you guessing.
+
+### What we did instead of a scope claim
+
+Published the disclosure route and the response timings above before the date rather than
+after. That is useful whichever way the scope question lands, and being early costs nothing.

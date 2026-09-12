@@ -22,9 +22,153 @@ So: zero runs, said out loud, in the place a reader would look for the first one
 | | |
 | --- | --- |
 | Runs executed | **0** |
-| Protocol | [`docs/studies/sim-to-real-so101.md`](../../docs/studies/sim-to-real-so101.md) — PRE-REGISTERED 24 July 2026 |
+| Protocol (SO-101 arm) | [`docs/studies/sim-to-real-so101.md`](../../docs/studies/sim-to-real-so101.md) — PRE-REGISTERED 24 July 2026 |
+| Protocol (RoboArena, DROID) | [below](#pre-registered-the-roboarena-matched-pair-6-september-2026) — PRE-REGISTERED 6 September 2026, while blocked |
 | Blocker | Physical hardware not yet in hand. The software path is installable (see below). |
 | What exists | The protocol, the `[hardware]` extra (resolves today), and a dry-run that validates the pipeline end to end against the stub policy. |
+
+## RoboArena, and what a real-robot entry actually needs — assessed 6 September 2026
+
+[RoboArena](https://robo-arena.github.io/) evaluates generalist robot policies on real DROID cells
+and publishes a leaderboard. It is the shortest published route from this project to a real-robot
+number, and the count above is the reason to want one. Its September 2026 round has a soft deadline
+of 8 September and a hard deadline of 13 September, and this was assessed against it. Recorded here
+rather than dropped, because "we looked and here is the gap" is the honest artifact and a
+leaderboard row we could not earn is not.
+
+**Three blockers, none of which is time.**
+
+1. **There is no policy server to submit.** RoboArena's form asks for a Server IP and Port and
+   whether the server implements their inference API — a `WebsocketPolicyServer` wrapping a
+   `BasePolicy`, conditioned on three camera views, returning joint-position action chunks, with
+   partial observations rejected. `provael serve` is the reference **attestation** server: it
+   exposes `/healthz`, `/attest` and `/assurance-report`, and it has never had anything to do with
+   robot inference. Nothing in this repository speaks that API, and answering "yes" to that question
+   would be false on a form.
+
+2. **The adapter that would front a π0.5 policy is scaffolding, by our own declaration.**
+   `SCAFFOLDING_POLICIES["openpi"]` reads *"also needs a running openpi policy server; not exercised
+   here"* — provael is a **client** of a policy server there, not a server. It has never been run
+   against a real openpi checkpoint. `provael list-policies` says so, the website now says so, and a
+   submission would be the first exercise of a path we publish as unexercised.
+
+3. **The gate has no bounds for a DROID cell, and inventing some is the failure this repo already
+   has a number for.** `ActionEnvelopeClamp` defaults to `BENIGN_DANGER_MAX = 0.0` and
+   `BENIGN_MOTION_L2_MAX = 0.1`, measured from the CPU fixture's benign envelope in the fixture's
+   own action space. DROID is 7-DoF joint position. Those scalars do not mean anything there.
+   Picking replacements unexamined is exactly what #136 was, `workspace.py` states in its own
+   docstring that the reachable bounds it computes are an observation and **deliberately not** a
+   calibrated keep-out zone, and the protocol this directory exists for already fixes the order:
+   calibrate from benign rollouts to a stated false-positive target **before** any attack runs.
+
+**What would close it, in order.** A keep-out envelope calibrated from DROID benign trajectories to
+a stated FPR — the data is public, so this is work rather than a blocker; a `BasePolicy`
+implementation wrapping an openpi client with that envelope at the action layer; a GPU host with a
+public IP to serve it. The first is the long pole and is a measurement, not an integration.
+
+**One number this assessment got wrong, kept here because being wrong about a number is exactly
+what this directory is for.** A draft covering letter for this submission stated that the benign
+control fires on **5 of 100 episodes**. The first version of this section called that fabricated,
+on the grounds that no arm of the pinned control run produces it. That was a check of one run
+against a figure that pools two, and the draft was right:
+
+| Run | Tool version | Benign `none` arm |
+| --- | --- | --- |
+| `results/smolvla_libero_object_suite` | 0.32.0 | 2/50 |
+| `results/smolvla_libero_object_control` | 0.32.0 | 3/50 |
+| **Pooled** | | **5/100 — 5.0%, Wilson 95% [2.2%, 11.2%]** |
+
+The pooled figure is also the better one, and it is not a reconstruction: issue #171 publishes
+exactly `5/100 (5.0%, Wilson 95% [2.2%, 11.2%])` and records that every firing lands on
+`libero_object/4` or `/5` while the other eight tasks stay silent through 80 benign episodes. A
+single-run 3/50 carries no interval and hides that clustering.
+
+The question the letter was reaching for survives intact and is the reason to want a real-robot
+round at all: **the benign control fires on 5 of 100 simulated episodes, clustered on two of ten
+tasks, and nobody knows whether that rate or that clustering holds on a real DROID cell.** That is
+what the round would buy, and it is worth more than the leaderboard row.
+
+## Pre-registered: the RoboArena matched pair, 6 September 2026
+
+Registered before any data exists, under the same discipline as
+[`docs/studies/sim-to-real-so101.md`](../../docs/studies/sim-to-real-so101.md). It is registered
+while still blocked, deliberately: fixing the prediction is free today and impossible later.
+
+### The venue, checked rather than assumed
+
+[RoboArena](https://robo-arena.github.io) runs **double-blind, pairwise** A/B evaluations on real
+DROID arms across a network of institutions, by a pool of **volunteer evaluators**. Its defining
+choice is that it does **not** standardise tasks: evaluators "pick any environment and task of their
+choice for each evaluation", and the only constraint is that both policies in a pair face the same
+task and environment. Evaluation is continuous — a policy is evaluated for as long as its server
+stays up, against a weekly budget.
+
+**There is no live deadline, and an earlier draft of this plan said there was.** The CoRL RoboArena
+challenge round with the 8 September soft and 13 September hard deadlines was **CoRL 2025**: that
+page reads "Conference on Robot Learning, 2025", its call for papers closed 17 September 2025, and
+its workshop was held 27 September 2025. Those dates were read off a stale page and projected onto
+2026. The submission form is live and accepting responses today, and the platform is active — the
+public data dump is dated 17 July 2026 — but nothing is closing. Recorded because the false urgency
+was about to buy a rushed submission.
+
+### What is submitted
+
+A **matched pair**: the base policy unmodified, and the same policy with the Provael keep-out
+predicate applied at the action layer. Same weights, same server build, one flag apart. The pair is
+the point — it makes the cost of the gate readable off the board instead of asserted here.
+
+**The base is `paligemma_fast_droid`, and the criterion is what is registered.** The base must be
+reproducible: its robot data public, and any pre-trained weights public. `paligemma_fast_droid`
+qualifies (DROID is released); `pi05_droid` was the initial plan and does not, because Pi's
+pre-training data is not released — by RoboArena's own submission-form definition that lands
+"open-source: No" on the row and yields a number no outside party can re-derive. A red-team result
+nobody can reproduce is the one kind this project may not publish. If the base changes, this
+paragraph is what has to change with it.
+
+### What is predicted, before seeing any result
+
+**In win rate, not Elo.** RoboArena's own paper positions its ranking method against *both* standard
+Elo computation and the conventional Bradley-Terry model, on the grounds that Bradley-Terry assumes
+each pairwise comparison happens under identical conditions and free task choice violates that. A
+prediction stated in Elo would be stated in a unit this venue does not report, which is a prediction
+that cannot be checked. The observable primitive is the head-to-head pairwise outcome, so that is
+what is registered.
+
+Let *w* be the gated arm's win rate in head-to-head comparisons against its own ungated twin.
+
+| | Registered before the run |
+| --- | --- |
+| Direction | **w < 50%.** A clamp can only remove commanded motion, so it can only cost task progress. |
+| Prediction | **w ≥ 40%** — the gate costs less than a ten-point win-rate gap. |
+| Abandon this line | **w < 25%.** The predicate would be unusable on real hardware whatever it catches in simulation. |
+| Read nothing before | **50 head-to-head comparisons.** Free task choice means small n is noise. |
+
+The three thresholds are **stated choices, not derivations** — the same status as
+`BENIGN_MARGIN_FRACTION` in `defenses/envelope.py`. They are fixed here so they cannot be chosen
+after the fact.
+
+**If w > 50%, that is not a win for the gate.** It is evidence the predicate is correlated with task
+structure rather than with safety, and it will be reported in those words.
+
+### What this design cannot establish, registered now rather than discovered later
+
+Evaluators choose their own tasks, so the two arms of a pair face the same task as each other but
+the *set* of tasks is whatever the pool happened to pick. A win-rate gap therefore measures the
+gate's cost **on the task distribution the evaluators generated**, not on any fixed benchmark, and
+it is not comparable to the simulation ASR on LIBERO. Neither number predicts the other; that is the
+open question, not a defect.
+
+Nor does any of it measure whether the gate **catches** anything. RoboArena scores preference between
+policies on benign tasks. It can price the gate and cannot value it.
+
+### Blockers, both of them
+
+The [assessment above](#roboarena-and-what-a-real-robot-entry-actually-needs--assessed-6-september-2026)
+has the detail. In short: there is no policy server to submit — `provael serve` is the attestation
+server — and the envelope has no bounds for a DROID cell, because `ActionEnvelopeClamp` defaults are
+the CPU fixture's benign envelope in the fixture's action space. **The calibration is the long pole,
+not the server**, and it is a measurement rather than an integration. With no deadline in play, doing
+it properly is now the cheaper option.
 
 ## The hardware this is written for
 
