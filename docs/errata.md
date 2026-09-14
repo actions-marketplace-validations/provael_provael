@@ -22,7 +22,7 @@ attacks) three days before this document minted E-2026-05 for the ISO 10218 corr
 side saw the other, and the previous version of this note wrongly said the two files agreed
 entry-for-entry. The website keeps the ID it published under; the same correction is recorded
 below as **E-2026-09**, so that every correction has an entry in the maintained source. The next
-free ID is **E-2026-11**.
+free ID is **E-2026-12**.
 
 ---
 
@@ -390,7 +390,7 @@ deadline, no measured result and no signed artifact is affected.
 ### What is wrong
 
 The CRA Article 14 sub-deadlines were published citing the Commission's CRA summary as their source.
-That is the document [E-2026-04](#e-2026-04--the-cra-severe-incident-final-report-was-published-with-the-wrong-start-point)
+That is the document [E-2026-04](#e-2026-04-the-cra-severe-incident-final-report-was-published-with-the-wrong-start-point)
 moved them **off**, five days earlier, because its phrasing does not carry the distinction the four
 rows encode — the two final reports run from different events.
 
@@ -432,7 +432,7 @@ the instrument rather than the instrument.
 signed artifact is affected: the control identifiers, the `iec-62443` requirement key and the emitted
 `routes_to` field are a published contract and were never the thing that was wrong.
 
-**This is the same correction as [E-2026-05](#e-2026-05--two-documents-said-iso-102182025-defers-its-cyber-detail-to-iec-62443),
+**This is the same correction as [E-2026-05](#e-2026-05-two-documents-said-iso-102182025-defers-its-cyber-detail-to-iec-62443),
 under a second ID.** 05 records it against two repository documents; this records it against four
 website pages, raised five days later. Issuing a second ID was a mistake, and both are published on
 an append-only page, so it is recorded rather than renumbered.
@@ -608,3 +608,50 @@ The note now derives nothing from memory: its figures name the arm they come fro
 records the reversal in its own changelog. Notes are content, not pages, and the website's figure
 checks did not read them; extending `check:figures` to the notes collection is the follow-up.
 
+## E-2026-11 — The shipped `gradient_patch` attack could not move a frame from its zero start, and the figures it was published with come from a script outside this repository
+
+**Status:** corrected in 0.42.0 (seeded random start inside the ε-ball; a regression test with an
+oracle whose gradient vanishes at the clean frame) · no published rate moves — the arm has never
+run against a VLA and every rate it could have entered was gated out as *not applicable* · no
+signed artifact is affected
+**Date raised:** 14 September 2026
+**Affects:** the `gradient_patch` attack as released from 0.39.1 to 0.41.2; the CHANGELOG entry that
+introduced it and the "update, 1 September 2026" paragraph of `PRIOR_ART.md`, both of which
+present a Diffusion Policy × PushT result (9/20 clean, 14/20 under random noise, 0/20 under the
+optimised perturbation, McNemar p = 0.00012) as evidence that "the harness now has the attack it
+was missing".
+
+### What was wrong
+
+The attack maximises the distance between the policy's vision feature of the perturbed frame and
+its feature of the clean frame. That objective's gradient is exactly zero *at* the clean frame,
+and the projected-gradient loop started from a zero perturbation — so its first step received
+`sign(0) = 0`, and every later step the same. Against a smooth encoder the shipped module could not
+leave the clean frame at all. The unit tests did not see it because their stand-in oracle returned
+a constant non-zero gradient everywhere. It surfaced on 14 September 2026 the first time the module
+was pointed at a real vision tower (SmolVLA, CPU): two refinements, L∞ distance 0.
+
+The PushT figures were measured by a script run outside this repository, which is not committed
+and cannot be re-run from it. Whatever that script did about the start point, it is not what the
+released module did. Presenting its numbers under the module's name implied a reproducibility the
+repository does not have, which is the kind of claim this project's own rule — a figure whose
+source cannot be checked is withheld — exists to prevent.
+
+### What is correct
+
+The loop now starts from a uniform draw inside the ε-ball, seeded from the episode seed and the
+step so the perturbation is a function of the observation and not of process state; a test with
+an oracle shaped like the real objective (zero at the clean frame, growing with distance) asserts
+the attack lands at the budget. The PushT figures are retained in the CHANGELOG and `PRIOR_ART.md`
+as a dated report of an external script's result and marked as such; they are not a measurement of
+this module and no page cites them as one. The first measurement of the module itself will be the
+SmolVLA × LIBERO run through `LeRobotAdapter.input_gradient`, and it will be committed under
+`results/` before it is quoted anywhere.
+
+### What was changed to prevent recurrence
+
+A real-oracle-shaped regression test (`tests/test_gradient_patch.py`) and a CPU test of the real
+adapter surface against a small differentiable fake (`tests/test_lerobot_whitebox.py`), so the
+attack is exercised end to end through a backend that backpropagates rather than through a
+constant. The adapter's oracle raises instead of declining on a broken graph, so an inert
+white-box arm cannot again be recorded as a white-box null.

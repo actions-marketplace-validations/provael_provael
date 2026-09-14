@@ -148,3 +148,77 @@ def test_mp4_writer_writes_a_playable_file(tmp_path: Path) -> None:
     writer.close()
     assert writer.frames_written == 5
     assert (tmp_path / "clip.mp4").stat().st_size > 0
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("imageio") is None or importlib.util.find_spec("imageio_ffmpeg") is None,
+    reason="imageio + imageio-ffmpeg ship with the [lerobot] extra, not the CPU core",
+)
+def test_compose_side_by_side_aligns_steps_and_holds_the_shorter_clip(tmp_path: Path) -> None:
+    from provael.video import GAP_PX, compose_side_by_side
+
+    def _clip(path: Path, frames: int, level: int) -> None:
+        w = Mp4Writer(path)
+        for step in range(1, frames + 1):
+            w.frame(step, np.full((16, 24, 3), level, dtype=np.uint8), unsafe=False)
+        w.close()
+
+    _clip(tmp_path / "benign.mp4", 6, 40)
+    _clip(tmp_path / "attacked.mp4", 3, 200)  # stopped early: the predicate fired
+    n = compose_side_by_side(tmp_path / "benign.mp4", tmp_path / "attacked.mp4", tmp_path / "ab.mp4")
+    assert n == 6  # the longer clip's length; the shorter holds its last frame
+
+    import imageio.v2 as imageio
+
+    # a for-loop, not list(): imageio's ffmpeg reader reports an infinite __len__
+    frames = [np.asarray(f) for f in imageio.get_reader(str(tmp_path / "ab.mp4"))]
+    assert len(frames) == 6
+    assert frames[0].shape == (16, 24 + GAP_PX + 24, 3)
+    # left half dark, right half bright, in the last frame too (the held frame is still there)
+    assert int(frames[-1][8, 4].mean()) < 90 and int(frames[-1][8, -4].mean()) > 150
+
+
+def test_compose_refuses_an_empty_clip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import provael.video as video
+
+    monkeypatch.setattr(video, "_read_frames", lambda p: [])
+    with pytest.raises(ValueError, match="nothing to compose"):
+        video.compose_side_by_side(tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "o.mp4")
+
+
+def test_libero_display_frame_turns_the_raw_frame_round() -> None:
+    """robosuite renders upside-down and the policy's processor flips; the clip must match the
+    policy's view, while the attack surface (the raw frame) is left exactly where it was."""
+    from provael.suites.libero import LiberoSuiteAdapter
+
+    raw = np.zeros((4, 6, 3), dtype=np.uint8)
+    raw[0, 0] = (255, 0, 0)  # a red pixel top-left in the raw frame
+    obs = {IMAGE_KEY: raw}
+    shown = LiberoSuiteAdapter.display_frame(LiberoSuiteAdapter.__new__(LiberoSuiteAdapter), obs)
+    assert shown is not None and shown.shape == raw.shape
+    assert tuple(shown[-1, -1]) == (255, 0, 0)  # bottom-right once turned round
+    assert tuple(raw[0, 0]) == (255, 0, 0)  # the observation itself is untouched
+    assert LiberoSuiteAdapter.display_frame(LiberoSuiteAdapter.__new__(LiberoSuiteAdapter), {}) is None
+
+
+def test_the_sink_receives_the_suite_display_frame(stub_policy: StubPolicy) -> None:
+    class _Gradient(_ImageSuite):
+        def _with_image(self, obs: Observation) -> Observation:
+            frame = np.zeros((16, 16, 3), dtype=np.uint8)
+            frame[:, :, 0] = np.arange(16, dtype=np.uint8)[None, :] * 16  # left dark, right bright
+            return {**obs, IMAGE_KEY: frame}
+
+    class _Flipping(_Gradient):
+        def display_frame(self, observation: Observation) -> Any:
+            img = image_from(observation)
+            return None if img is None else np.ascontiguousarray(img[::-1, ::-1])
+
+    flipped, plain = FrameList(), FrameList()
+    for suite, sink in ((_Flipping(), flipped), (_Gradient(), plain)):
+        run_episode(
+            stub_policy, suite, RolePlayAttack(), task="reach", seed=0, horizon=2,
+            frame_sink=sink,
+        )
+    assert flipped.frames and plain.frames
+    assert not np.array_equal(flipped.frames[0][1], plain.frames[0][1])
+    assert np.array_equal(flipped.frames[0][1], plain.frames[0][1][::-1, ::-1])

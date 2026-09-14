@@ -44,7 +44,10 @@ def report(
         OutputFormat,
         typer.Option(
             "--format",
-            help="Output: 'table', 'sarif', 'compliance', 'scorecard', 'oscal', or 'mlbom'.",
+            help=(
+                "Output: 'table', 'sarif', 'compliance', 'scorecard', 'oscal', 'mlbom', or "
+                "'test-report' (ISO/IEC 17025 clause-7.8-shaped Markdown; not accredited)."
+            ),
         ),
     ] = OutputFormat.table,
     threshold: Annotated[
@@ -148,6 +151,19 @@ def report(
         else:
             print(to_oscal_json(loaded))  # machine-readable OSCAL to stdout
         return
+    if fmt is OutputFormat.test_report:
+        from provael.test_report import load_manifest, to_test_report_markdown, write_test_report
+
+        manifest = load_manifest(in_dir)
+        if out is not None:
+            write_test_report(loaded, out, manifest)
+            note = "with" if manifest is not None else "WITHOUT"
+            _out.print(
+                f"Wrote [cyan]{out}[/cyan]  (clause-7.8-shaped test report, {note} manifest)"
+            )
+        else:
+            print(to_test_report_markdown(loaded, manifest))
+        return
     if fmt is OutputFormat.mlbom:
         if out is not None:
             write_ml_bom(loaded, out)
@@ -222,15 +238,36 @@ def transfer_test_cmd(
 def export(
     in_dir: Annotated[Path, typer.Option("--in", help="Directory containing report.json.")],
     fmt: Annotated[
-        ExportFormat, typer.Option("--format", help="Evidence-graph format (currently 'avid').")
+        ExportFormat,
+        typer.Option(
+            "--format",
+            help="'avid' (evidence-graph record) or 'hf-eval' (Hugging Face .eval_results YAML).",
+        ),
     ] = ExportFormat.avid,
     out: Annotated[
         Path | None, typer.Option("--out", help="Write here instead of stdout.")
     ] = None,
+    dataset: Annotated[
+        str | None,
+        typer.Option(
+            "--dataset",
+            help="hf-eval only: the Hub dataset id registered as the benchmark (required).",
+        ),
+    ] = None,
+    source_url: Annotated[
+        str | None,
+        typer.Option(
+            "--source-url",
+            help="hf-eval only: URL of the committed results directory the entries point at.",
+        ),
+    ] = None,
 ) -> None:
-    """Export a run into an evidence-graph format (AVID record) for a recognised database.
+    """Export a run into an external database's format: an AVID record, or Hugging Face
+    Community Evals entries (`.eval_results/*.yaml`, one per measured arm).
 
-    Submitting the record to AVID is an external action — this only produces the file.
+    Submitting the file — to AVID, or as a pull request on the model's Hub repo — is an external
+    action; this only produces it. Nothing here emits a `verifyToken`: that badge is reserved for
+    HF Jobs runs with inspect-ai, which provael is not.
     """
     try:
         loaded = load_report(in_dir)
@@ -240,9 +277,46 @@ def export(
     except ValidationError:
         _fail(f"{in_dir} does not contain a valid Provael report.json")
         return
-    # fmt is ExportFormat.avid (the only member today).
+    if fmt is ExportFormat.hf_eval:
+        from provael.hf_eval import to_eval_results_yaml, write_eval_results
+        from provael.test_report import load_manifest
+
+        if not dataset:
+            _fail("--format hf-eval needs --dataset <hub dataset id> (the registered benchmark)")
+            return
+        manifest = load_manifest(in_dir)
+        if out is not None:
+            write_eval_results(loaded, dataset, out, manifest=manifest, source_url=source_url)
+            _out.print(f"Wrote [cyan]{out}[/cyan]  (Hugging Face .eval_results entries)")
+        else:
+            print(to_eval_results_yaml(loaded, dataset, manifest=manifest, source_url=source_url))
+        return
     if out is not None:
         write_avid(loaded, out)
         _out.print(f"Wrote [cyan]{out}[/cyan]  (AVID record)")
     else:
         print(to_avid_json(loaded))
+
+
+@app.command("compose-video")
+def compose_video(
+    left: Annotated[Path, typer.Argument(help="Clip for the left half (e.g. the benign twin).")],
+    right: Annotated[
+        Path, typer.Argument(help="Clip for the right half (e.g. the attacked episode).")
+    ],
+    out: Annotated[Path, typer.Option("--out", help="Where to write the composed MP4.")],
+) -> None:
+    """Put two episode clips side by side, step-aligned, into one MP4.
+
+    The clips come from `provael attack --video-dir`; pair the benign and the attacked episode of
+    the same task and seed so the divergence is visible at the step it happens. Needs the
+    `[lerobot]` extra's imageio + ffmpeg; the CPU core does not ship them.
+    """
+    from provael.video import compose_side_by_side
+
+    try:
+        frames = compose_side_by_side(left, right, out)
+    except (FileNotFoundError, ValueError, ImportError) as exc:
+        _fail(str(exc))
+        return
+    _out.print(f"Wrote [cyan]{out}[/cyan]  ({frames} frames)")

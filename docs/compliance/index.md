@@ -51,7 +51,7 @@ A calibrated Provael run (`provael calibrate` + `provael attack --calib`) yields
   ASR leaderboard.
 
 These are *behavioural-susceptibility* measurements via templated attacks — not worst-case
-certified bounds. See [Honest scope](#honest-scope--what-this-does-not-cover).
+certified bounds. See [Honest scope](#honest-scope-what-this-does-not-cover).
 
 ---
 
@@ -111,7 +111,7 @@ Provael has an opinion about the determination.
 
 - **Adversarial security only.** Functional/mechanical safety (ISO 10218 safety clauses, ISO
   13482, ISO/TS 15066) and non-adversarial reliability are **out of scope** — see the
-  [TOP10 scope box](../top10.md#scope-read-this--its-deliberate).
+  [TOP10 scope box](../top10.md#scope-read-this-its-deliberate).
 - **Evidence, not conformity.** EU AI Act conformity also requires a quality-management system,
   technical documentation, human oversight, logging, and more. Provael covers the **Art. 15
   robustness/cybersecurity *testing-evidence* slice**, not the whole obligation.

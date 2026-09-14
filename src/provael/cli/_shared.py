@@ -76,12 +76,14 @@ class OutputFormat(StrEnum):
     scorecard = "scorecard"
     oscal = "oscal"
     mlbom = "mlbom"
+    test_report = "test-report"
 
 
 class ExportFormat(StrEnum):
     """Evidence-graph export formats for ``provael export``."""
 
     avid = "avid"
+    hf_eval = "hf-eval"
 
 
 class CrosswalkTarget(StrEnum):

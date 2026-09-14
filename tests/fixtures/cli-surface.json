@@ -429,7 +429,7 @@
      "secondary_opts": []
     },
     {
-     "help": "Output: 'table', 'sarif', 'compliance', 'scorecard', 'oscal', or 'mlbom'.",
+     "help": "Output: 'table', 'sarif', 'compliance', 'scorecard', 'oscal', 'mlbom', or 'test-report' (ISO/IEC 17025 clause-7.8-shaped Markdown; not accredited).",
      "is_flag": false,
      "name": "fmt",
      "opts": [
@@ -549,7 +549,7 @@
    "short_help": null
   },
   {
-   "help": "Export a run into an evidence-graph format (AVID record) for a recognised database.\n\nSubmitting the record to AVID is an external action \u2014 this only produces the file.",
+   "help": "Export a run into an external database's format: an AVID record, or Hugging Face\nCommunity Evals entries (`.eval_results/*.yaml`, one per measured arm).\n\nSubmitting the file \u2014 to AVID, or as a pull request on the model's Hub repo \u2014 is an external\naction; this only produces it. Nothing here emits a `verifyToken`: that badge is reserved for\nHF Jobs runs with inspect-ai, which provael is not.",
    "name": "export",
    "params": [
     {
@@ -563,7 +563,7 @@
      "secondary_opts": []
     },
     {
-     "help": "Evidence-graph format (currently 'avid').",
+     "help": "'avid' (evidence-graph record) or 'hf-eval' (Hugging Face .eval_results YAML).",
      "is_flag": false,
      "name": "fmt",
      "opts": [
@@ -580,6 +580,63 @@
       "--out"
      ],
      "required": false,
+     "secondary_opts": []
+    },
+    {
+     "help": "hf-eval only: the Hub dataset id registered as the benchmark (required).",
+     "is_flag": false,
+     "name": "dataset",
+     "opts": [
+      "--dataset"
+     ],
+     "required": false,
+     "secondary_opts": []
+    },
+    {
+     "help": "hf-eval only: URL of the committed results directory the entries point at.",
+     "is_flag": false,
+     "name": "source_url",
+     "opts": [
+      "--source-url"
+     ],
+     "required": false,
+     "secondary_opts": []
+    }
+   ],
+   "short_help": null
+  },
+  {
+   "help": "Put two episode clips side by side, step-aligned, into one MP4.\n\nThe clips come from `provael attack --video-dir`; pair the benign and the attacked episode of\nthe same task and seed so the divergence is visible at the step it happens. Needs the\n`[lerobot]` extra's imageio + ffmpeg; the CPU core does not ship them.",
+   "name": "compose-video",
+   "params": [
+    {
+     "help": "Clip for the left half (e.g. the benign twin).",
+     "is_flag": false,
+     "name": "left",
+     "opts": [
+      "left"
+     ],
+     "required": true,
+     "secondary_opts": []
+    },
+    {
+     "help": "Clip for the right half (e.g. the attacked episode).",
+     "is_flag": false,
+     "name": "right",
+     "opts": [
+      "right"
+     ],
+     "required": true,
+     "secondary_opts": []
+    },
+    {
+     "help": "Where to write the composed MP4.",
+     "is_flag": false,
+     "name": "out",
+     "opts": [
+      "--out"
+     ],
+     "required": true,
      "secondary_opts": []
     }
    ],

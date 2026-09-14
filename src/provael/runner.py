@@ -23,16 +23,17 @@ import numpy as np
 
 from provael import __version__
 from provael.attacks.base import Attack
+from provael.attacks.gradient_patch import GradientOracleAttack
 from provael.attacks.optimized import OracleAttack, SchemaAwareAttack, ZoneAwareAttack
 from provael.attacks.registry import resolve_attacks
-from provael.attacks.weight_integrity import WeightIntegrityAttack
+from provael.attacks.weight_integrity import SensitivityReferencePolicy, WeightIntegrityAttack
 from provael.calibration import Calibration, anytime_ci, wilson_ci
 from provael.config import RunConfig
 from provael.defenses.base import Defense
 from provael.defenses.registry import make_defense
 from provael.evidence import classify_run
 from provael.ledger import TrialKey, append_trial, completed_keys, record_of, results_for
-from provael.policies.base import PolicyAdapter
+from provael.policies.base import InputGradientProvider, PolicyAdapter
 from provael.policies.registry import make_policy
 from provael.scoring.asr import (
     adversarial_asr,
@@ -57,7 +58,7 @@ from provael.types import (
     RunReport,
     Trajectory,
 )
-from provael.video import FrameSink, Mp4Writer, clip_name, image_from
+from provael.video import FrameSink, Mp4Writer, clip_name
 
 
 def _configure_optimized(
@@ -100,6 +101,35 @@ def _configure_optimized(
         # the attack must degrade to no motion signal rather than guess.
         if isinstance(attack, SchemaAwareAttack):
             attack.action_schema = schema
+    # White-box INPUT gradients for the gradient family. The policy backprops its own image
+    # objective to its camera tensor; the attack does the projection in numpy. No reset callback,
+    # on purpose: the oracle touches no per-episode state (see LeRobotAdapter.input_gradient), and
+    # resetting the action queue after every refinement would make the attacked arm re-plan every
+    # step while the benign arm re-plans every chunk — a confound no rate could be read through.
+    if isinstance(policy, InputGradientProvider) and policy.provides_input_gradient():
+        for attack in attacks:
+            if isinstance(attack, GradientOracleAttack):
+                attack.attach_gradient_oracle(policy.input_gradient, None)
+
+
+def _configure_weight_reference(
+    attacks: list[Attack], policy: PolicyAdapter, suite: SuiteAdapter, task: str, seed: int
+) -> None:
+    """Hand a weight-attackable real policy the operating point its gradient is taken at.
+
+    Only when the run carries a weight-integrity arm AND the policy asks for a reference
+    (:class:`~provael.attacks.weight_integrity.SensitivityReferencePolicy`). The deterministic
+    stub has a closed-form derivative and never enters here, so no CPU report moves. The point is
+    the benign first frame of the run's first task at the run seed — one point per run, which is
+    what keeps the gradient arm's bit selection a fixed function of the clean weights. The suite
+    is reset again by ``run_episode`` for the episode itself; a seeded reset is repeatable.
+    """
+    if not any(isinstance(a, WeightIntegrityAttack) for a in attacks):
+        return
+    if not isinstance(policy, SensitivityReferencePolicy):
+        return
+    observation = suite.reset(task, seed)
+    policy.set_sensitivity_reference(observation, str(observation.get("instruction", "")), seed)
 
 
 def _configure_zones(attacks: list[Attack], suite: SuiteAdapter, task: str) -> None:
@@ -289,7 +319,9 @@ def run_episode(
         decisions.append(decision)
 
         if frame_sink is not None:
-            shown = image_from(adv_obs)
+            # The suite turns its raw frame the right way up for the viewer; the attack and the
+            # policy keep working on the raw frame (see SuiteAdapter.display_frame).
+            shown = suite.display_frame(adv_obs)
             if shown is not None:
                 frame_sink.frame(t, shown, decision.unsafe)
 
@@ -411,6 +443,8 @@ def run(
         ]
         done_keys = completed_keys(ledger_path) & set(planned)
         replay = results_for(planned, ledger_path)
+
+    _configure_weight_reference(attacks, policy, suite, tasks[0], config.seed)
 
     results: list[AttackResult] = []
     for task in tasks:

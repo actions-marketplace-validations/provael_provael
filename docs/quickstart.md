@@ -29,7 +29,7 @@ predicate: default (uncalibrated) · benign baseline FPR 0.0%
 ```bash
 provael list-policies         # 8 policies — 1 CPU (stub), 7 need a GPU extra, of which 3 are registered scaffolding
 provael list-attacks          # 44 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
-provael list-suites           # 6 suites registered — 3 CPU fixtures, 2 gated real simulators, 1 scaffolding (never run)
+provael list-suites           # 7 suites registered — 3 CPU fixtures, 3 gated real simulators, 2 scaffolding (never run)
 provael list-recipes          # named presets: quick / instruction-only / core-sweep / full-sweep / ci-gate
 provael list-reproductions    # FreezeVLA / OpenVLA-patch / BadVLA / RoboPAIR
 provael reproduce freezevla   # reproduce a published attack on the CPU stub
@@ -41,7 +41,10 @@ provael export --in runs/first-scan --format avid        # AVID record
 ## Outputs
 
 `report.json` (byte-deterministic), `report.md`, SARIF (`--format sarif`), a compliance evidence
-pack (`--format compliance`), an ASR scorecard (`--format scorecard`), OSCAL, and an AVID record.
+pack (`--format compliance`), an ASR scorecard (`--format scorecard`), OSCAL, an AVID record, and a
+test report laid out as ISO/IEC 17025 clause 7.8 (`provael report --format test-report`) — the
+shape an assessor reads, with the blanks a signatory fills; not an accredited report and no
+statement of conformity.
 
 ## Real models & simulators
 
@@ -53,6 +56,12 @@ PROVAEL_INTEGRATION=1 provael attack --policy smolvla --suite libero \
 
 See the [examples gallery](examples.md) for π0 / GR00T / OpenVLA adapters and the second
 (Meta-World) suite.
+
+Add `--video-dir clips/` to write one MP4 per episode — the frames the policy actually saw, after
+the attack and any defense, red-bordered from the first step the predicate fired. Recording never
+touches `report.json`. `provael compose-video clips/<benign>.mp4 clips/<attacked>.mp4 --out
+pair.mp4` puts the benign twin and the attacked episode of one task and seed side by side. Both
+need the `[lerobot]` extra's imageio + ffmpeg.
 
 ## Continuous security gate (CI)
 

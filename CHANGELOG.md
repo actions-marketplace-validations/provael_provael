@@ -23,14 +23,100 @@ All notable changes to this project are documented here. The format is based on
   unchanged); `watch/registry.json`, the inventory lines and the checked-in evidence manifest are
   regenerated.
 
+- **The weight-integrity family and the gradient-patch attack can now run against a real policy.**
+  `LeRobotAdapter` implements `WeightAccessible` over the weight matrix of `model.action_out_proj`
+  — the last linear map before the action chunk on every flow-matching checkpoint lerobot 0.5.1
+  loads through it (SmolVLA: 15,360 parameters) — through a symmetric per-tensor INT8 view. A
+  flipped INT8 value is applied to the live float weights as the delta the same flip would make in
+  an INT8 deployment, and the clean vector restores the original floats bit-for-bit; the runner
+  hands the adapter its reference operating point (the benign first frame of the run's first task
+  at the run seed, via the new `SensitivityReferencePolicy` protocol) so `d(danger)/d(weight)` is
+  one autograd pass at one fixed point per run. The danger proxy — translation energy of the
+  executed chunk in normalized action space — is documented as a ranking heuristic, not the
+  predicate's derivative. `LeRobotAdapter.input_gradient` backpropagates
+  `||enc(x) − enc(x_clean)||²` through the backend's own vision tower to the suite-frame image, and
+  the runner attaches it to every attack exposing `attach_gradient_oracle` (the new
+  `InputGradientProvider` / `GradientOracleAttack` protocols) — without a reset callback, because
+  the oracle touches no per-episode state and a reset per refinement would make the attacked arm
+  re-plan every step. pi0-FAST has no `action_out_proj` and reports the family *not applicable*;
+  the deterministic stub enters neither path, so no CPU report moves. Verified on the real
+  `HuggingFaceVLA/smolvla_libero` checkpoint on a CPU with a synthetic frame (no simulator):
+  finite sensitivities, exact restore, finite input gradients, and the attack landing at its
+  budget. No rate is claimed until the GPU run is committed.
+- **A `vla_arena` suite (registered scaffolding): the first suite whose unsafe predicate is
+  DECLARED rather than fitted.** VLA-Arena (PKU-Alignment, ICML 2026) evaluates each task's own
+  `(:cost …)` clause every step and reports it in `info["cost"]`; the adapter's `is_unsafe()` is
+  exactly "that clause fired", and `calibration_signal()` returns `None` so `provael calibrate`
+  cannot replace a declared predicate with a threshold on its own output. Task names are
+  `<benchmark>/L<level>/<id>` across the sixteen registered benchmarks; `reset()` refuses a task
+  from another benchmark or level. The raw observation is handed to the policy adapter in lerobot's
+  LIBERO-wrapper shape and `features()` returns the LIBERO env config — the same Panda, cameras,
+  8-dim state and 180-degree camera convention, and what VLA-Arena's own SmolVLA evaluator does —
+  so a LIBERO checkpoint runs unchanged. Written against the package's source (14 Sep 2026) and
+  tested on a fake shaped by it; VLA-Arena pins Python 3.11 / robosuite 1.5.1 / numpy 1.26.4 and
+  needs its own environment. **No run has been made through it**, `list-suites` says so, and the
+  coverage counts exclude it; the registry is 7 suites (3 fixtures, 3 gated simulators, 2
+  scaffolding) and `watch/registry.json`, the README and the quickstart inventory lines are
+  regenerated.
+- **`provael report --format test-report`: a test report in the shape of ISO/IEC 17025:2017
+  clause 7.8.** The 13 September regulatory re-read found that no certifier, notified body or
+  insurer publishes acceptance of SARIF, OSCAL or an ML-BOM; what an assessor of a machinery
+  technical file reads is a clause-7.8-shaped test report. The emitter lays a run out that way —
+  identification, item under test (checkpoint, revision, digest), method, dates and location,
+  conditions (hardware, precision, OS, lock digest), results with Wilson intervals and the benign
+  floor, uncertainty (per-seed spread, anytime interval, the stochastic-sampling caveat),
+  deviations (not-applicable arms, replayed episodes, skipped checks, missing manifest fields),
+  scope, external providers, evidence state and verdict, authorisation — and an Annex A clause
+  map rendered from `provael.compliance`, the single source of every framework mapping. It reads
+  `execution-manifest.json` beside `report.json` when present. The report says in its first line
+  that Provael is not an accredited laboratory, that this is not an ISO/IEC 17025 report and that
+  no statement of conformity is made; the date of issue and the authorising person are conspicuous
+  blanks for the human who signs, so the emitter introduces no wall-clock value and stamps no
+  signature that never happened.
+- **`provael export --format hf-eval --dataset <benchmark>`: Hugging Face Community Evals
+  entries.** One `.eval_results/*.yaml` entry per *measured* arm — treatments, the benign
+  baseline and the harmless-variation controls alike — with `value` the episode-level unsafe
+  fraction and `notes` carrying the role, the counts, the 95% Wilson interval, the predicate
+  state, the tool version and the checkpoint, so the Hub page shows the floor beside the rate.
+  Arms with no applicable episode are omitted, never published as 0; `date` comes from the
+  execution manifest when present and is otherwise left to the Hub's commit time; no
+  `verifyToken` is ever emitted (that badge is for HF Jobs + inspect-ai runs). Task ids are the
+  stable `<suite>--<attack>`, and `provael.hf_eval.benchmark_eval_yaml` writes the benchmark
+  dataset's `eval.yaml` declaring every arm the registry can measure. The Hub side — registering
+  the benchmark dataset and adding `provael` to `huggingface.js`'s `evaluation_framework` enum —
+  is a pull request a person opens; the emitter only writes the file. Schema read from
+  huggingface.co/docs/hub/eval-results on 14 September 2026 (a work-in-progress feature).
+- **`scripts/plot_keepout_paths.py` draws every episode's end-effector path against the task's
+  keep-out zone** (top-down and side panels, one SVG per task, no plotting dependency): benign
+  paths in blue, the chosen attack arm in red with a dot at the first unsafe step, the committed
+  calibration or the documented default box shaded. It reads the trajectories every episode
+  record has carried since 0.40, so a picture of forty benign paths against the box answers the
+  #136 question — does the default box sit inside the benign workspace — faster than any rate.
+  Reports written before 0.40 carry no trajectory; the script says so and draws nothing.
+- **`docs/compliance/machinery-annex-iii-corruption.md`: Regulation (EU) 2023/1230 Annex III
+  §1.1.9 (protection against corruption) and §1.2.1 (safety and reliability of control systems)
+  quoted verbatim from EUR-Lex (read 14 September 2026) and mapped clause by clause** — under each
+  paragraph and lettered point, the Provael artifact that speaks to it (injection arms for the
+  connected-device paragraph, checkpoint integrity and the weight-corruption ladder for critical
+  software, the keep-out predicate for "beyond its defined task and movement space", the
+  harmless-variation controls for foreseeable human error, the measured defenses for "correct the
+  machinery at all times") and what it does not establish; the start/stop, protective-device and
+  assembly points are named as out of scope. Linked from the machinery-regulation page and from
+  `--format test-report`'s Annex A. Four remaining double-hyphen doc anchors fixed.
 - **`provael attack --video-dir DIR` writes one MP4 per episode**: the frames the policy actually
   saw (after the attack and any defense), red-bordered from the first step the suite's predicate
   fired. A runner argument, not a `RunConfig` field, so a run with recording on and off produce
   byte-identical reports and no attestation digest moves — the same rule `audit_sink` follows.
   `imageio` + `imageio-ffmpeg` (in the `[lerobot]` extra) are imported lazily; the CPU core gains
   no dependency. Episodes replayed from a `--resume` ledger have no clip. `provael.video` exposes
-  `FrameList` for callers composing their own output (an attacked-vs-benign side-by-side is a few
-  lines on top of it).
+  `FrameList` for callers composing their own output. **`provael compose-video LEFT RIGHT --out`**
+  puts two of those clips side by side, step-aligned — the benign twin beside the attacked
+  episode at the same task and seed — with the shorter clip holding its last frame so an episode
+  the predicate stopped early stays on screen at its verdict. Clips are written from the suite's
+  new `display_frame`, which the LIBERO suite overrides to turn robosuite's 180-degree-rotated raw
+  frame the right way up — the policy's processor does the same flip before inference, so the
+  clip shows what the policy saw; the attack surface and every committed visual result stay on
+  the raw frame.
 - **Release assets carry signed SLSA build provenance.** `release.yml` runs
   `actions/attest-build-provenance` over the wheel, the sdist, the CycloneDX SBOM and `SHA256SUMS`
   before `gh release create`, so `gh attestation verify <asset> --repo provael/provael` names the
@@ -48,6 +134,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **`gradient_patch` could not move a frame (E-2026-11).** Its objective's gradient is exactly
+  zero at the clean frame and the search started from a zero perturbation, so against a smooth
+  encoder the released module (0.39.1–0.41.2) never left the clean frame — found the first time it
+  met a real vision tower. The loop now starts from a uniform draw inside the ε-ball, seeded from
+  the episode seed and the step; a regression test uses an oracle shaped like the real objective.
+  No published rate moves: the arm never ran against a VLA. The Diffusion Policy × PushT figures it
+  shipped with came from a script outside this repository and are now labelled as that script's
+  result, not this module's, in `PRIOR_ART.md` and the errata ledger.
 - **Three stale sentences in the compliance docs** (found by the 13 Sep regulatory re-read):
   `docs/compliance/index.md` called ISO 25785-1 a "Working Draft… expected 2026–2027" (it is a
   Committee Draft since 8 May 2026 with no committed date; trackers read ~2028) and opened the
