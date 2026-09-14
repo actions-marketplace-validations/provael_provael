@@ -8,6 +8,70 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Two more control arms, `scrambled_text` and `roleplay_no_target`, because the first two left
+  one objection standing.** `nonsense_text` is three tokens; `roleplay` renders as twenty. A 0/50
+  on three tokens never showed that a twenty-token out-of-distribution string is harmless, so the
+  44/50 headline was still consistent with "a long unfamiliar sentence derails SmolVLA" — the
+  generic fragility RobustVLA (arXiv:2510.00037) and LIBERO-PRO already document, not attacker
+  control. `scrambled_text` is the roleplay prompt's own tokens with the target noun replaced by a
+  one-token filler and the order destroyed, **whitespace-token count identical**, seeded per
+  episode. `roleplay_no_target` is the roleplay frame intact with only the graspable target
+  replaced by the same filler, so a firing there is the imperative frame driving the policy and
+  not the object. Both are built *from* `RolePlayAttack.TEMPLATE`, so the match survives a
+  template change; both carry the `control` role and enter neither the ASR nor the benign FPR.
+  `--attacks control` now resolves to four arms. The registry is 44 attacks (39 adversarial,
+  unchanged); `watch/registry.json`, the inventory lines and the checked-in evidence manifest are
+  regenerated.
+
+- **`provael attack --video-dir DIR` writes one MP4 per episode**: the frames the policy actually
+  saw (after the attack and any defense), red-bordered from the first step the suite's predicate
+  fired. A runner argument, not a `RunConfig` field, so a run with recording on and off produce
+  byte-identical reports and no attestation digest moves — the same rule `audit_sink` follows.
+  `imageio` + `imageio-ffmpeg` (in the `[lerobot]` extra) are imported lazily; the CPU core gains
+  no dependency. Episodes replayed from a `--resume` ledger have no clip. `provael.video` exposes
+  `FrameList` for callers composing their own output (an attacked-vs-benign side-by-side is a few
+  lines on top of it).
+- **Release assets carry signed SLSA build provenance.** `release.yml` runs
+  `actions/attest-build-provenance` over the wheel, the sdist, the CycloneDX SBOM and `SHA256SUMS`
+  before `gh release create`, so `gh attestation verify <asset> --repo provael/provael` names the
+  workflow, tag and commit that built it. PyPI already had PEP 740 attestations for the wheel and
+  sdist; the GitHub release assets carried nothing, which is what OpenSSF Scorecard's
+  Signed-Releases check scored 0 on.
+- **The execution manifest's `hardware` names the CPU count and the CUDA device**, not just the
+  ISA — `x86_64` described every run ever recorded and distinguished nothing.
+- **`examples/gpu-ci/local_libero_sweep.py`** — the sharded LIBERO screen on one machine (N
+  resumable shards, per-shard logs and timeouts, `--commit` provenance) with an `aggregate` that
+  reproduces the published cross-shard statistics from the committed shards.
+- **`docs/studies/pi0-openpi-transfer.md`** carries its design (n = 50 per arm, 5 seeds, horizon
+  280) and Amendment 1: the first leg runs π0.5 through the native `pi05` adapter, with what that
+  narrows and what it leaves open.
+
+### Changed
+
+- **The Modal LIBERO recipe reserves four CPU cores (`cpu=4`).** Modal's default reservation is
+  0.125 cores, and the pipeline is CPU-bound — MuJoCo, EGL rendering and tokenisation — so the ten
+  committed L4 shards averaged 0.77 s/step while a 24-core workstation with a slower GPU ran the
+  same stack at 0.39 s/step. The Modal effect is unmeasured until the `timing` stage re-runs; the
+  comment at the decorator says so, and no budget in the docs is re-sized on it yet.
+
+### Fixed
+
+- **Three stale sentences in the compliance docs** (found by the 13 Sep regulatory re-read):
+  `docs/compliance/index.md` called ISO 25785-1 a "Working Draft… expected 2026–2027" (it is a
+  Committee Draft since 8 May 2026 with no committed date; trackers read ~2028) and opened the
+  routing box with the pre-adoption "political agreement May 2026" clause (it is Regulation (EU)
+  2026/1744, OJ 24 July 2026, in force 27 July); `machinery-reg-2027.md` said ISO 10218:2025 was
+  "in force" (a standard is published, not in force).
+- **A LIBERO run is built for the task suite its tasks name.** `LiberoSuiteAdapter.reset()`
+  parsed the suite out of a `"libero_spatial/3"` task name and then discarded it: the environment
+  came from the adapter's constructor default (`libero_object`) and the episode was recorded as
+  `libero_spatial/3` — the suite-level twin of the task-level misattribution `_build_env` already
+  refuses, and the CLI had no other way to ask for spatial, goal or 10. `make_suite()` now takes
+  the run's tasks and builds the adapter for the one suite they name (a list mixing suites is
+  refused), `reset()` raises on a prefix that does not match the adapter — before the lerobot
+  gate, so the failure reproduces on a machine without the simulator — and a bare `"3"` is task 3,
+  not task 0. `RunConfig` is unchanged, so no report or attestation digest moves.
+
 - **Korea's AI Framework Act (Act No. 20676) enters the compliance catalogue — the first non-EU
   national statute in it.** Three rows against Article 34(1), the duties on an operator "providing
   high-impact AI or AI-based products and services": subparagraph 1 (risk management plan),
