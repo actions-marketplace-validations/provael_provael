@@ -459,16 +459,16 @@ app = modal.App(f"provael-libero-{STAGE}", image=image)
 
 @app.function(
     gpu="L4",
-    # Four real cores, because the default is an eighth of one. Modal reserves 0.125 CPU cores and
-    # 128 MiB per container unless told otherwise (modal.com/docs/guide/resources), and this
-    # pipeline is not GPU-bound: MuJoCo physics, EGL rendering and tokenisation all run on the CPU
-    # while a 450M-parameter policy leaves the L4 mostly idle. The ten committed shards averaged
-    # 0.77 s/step gross on that default reservation (71,687 steps in 15.4 GPU-hours); a 24-core
-    # workstation with a SLOWER GPU (RTX 2000 Ada) ran the same stack at 0.39 s/step on 14 Sep
-    # 2026 with the GPU at 25-44 %. `cpu=4` costs about $0.19/h on top of the L4 and is the
-    # cheapest lever on that constant. Its effect on Modal is NOT yet measured: re-run the
-    # `timing` stage (same shape as the 174 s datum below) before sizing a budget from it.
-    cpu=4,
+    # No `cpu=` reservation, and that is a MEASURED choice, not an oversight. Modal reserves 0.125
+    # cores per container by default, and the pipeline is CPU-heavy (MuJoCo, EGL rendering,
+    # tokenisation), so the obvious lever on the 0.77 s/step the committed L4 shards averaged was
+    # `cpu=4` (+$0.19/h). Tried on 14 Sep 2026 (run 34832653162): the `timing` stage took 245 s
+    # for setup + one 217-step episode against 174 s for setup + one episode on the default
+    # reservation — no speed-up, if anything slower, within one-episode noise. The default
+    # reservation evidently bursts to what this pipeline needs; the 0.39 s/step a 24-core
+    # workstation reached the same day is a faster CPU, not more of one. Re-test with a
+    # multi-episode stage before reserving cores again; a one-episode datum cannot separate
+    # setup from the marginal rate, which is exactly what the `probe` stage exists for.
     timeout=int(CFG["timeout"]),
     volumes={"/runs": volume, "/cache": cache},
 )
