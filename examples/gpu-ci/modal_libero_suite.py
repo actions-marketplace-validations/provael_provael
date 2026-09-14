@@ -160,6 +160,28 @@ ATTACKS = "none,instruction,visual,injection"
 PROVAEL_PIN = "0.41.2"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
 
+
+def _pin_commit() -> str | None:
+    """Commit of the tag the container installs from PyPI, resolved on the driver machine.
+
+    The container has no git checkout (it pip-installs the pinned release), so without this the
+    execution manifest records `commit: null`. Resolved from `v{PROVAEL_PIN}` — the code that
+    actually runs — never from the driver's HEAD, which may be a different commit. None when the
+    driver's checkout has no tags; the manifest then records the gap rather than a guess.
+    """
+    try:
+        out = subprocess.run(  # noqa: S603,S607 - fixed argv, no user input
+            ["git", "rev-parse", "--verify", "--short", f"v{PROVAEL_PIN}^{{commit}}"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = out.stdout.strip()
+    return sha if out.returncode == 0 and sha else None
+
+
+PIN_COMMIT = _pin_commit()
+
 STAGES: dict[str, dict[str, str]] = {
     # ONE episode. Its only job is to measure seconds-per-episode so the other two stages can be
     # sized by arithmetic instead of by guess. This stage exists because the guess was wrong: the
@@ -427,6 +449,8 @@ image = (
         "PROVAEL_INTEGRATION": "1",
         # Sends the SmolVLA checkpoint to the cache Volume instead of the container's disk.
         "HF_HOME": "/cache/hf",
+        # Provenance for execution-manifest.json: the pinned release's commit (see _pin_commit).
+        **({"PROVAEL_COMMIT": PIN_COMMIT} if PIN_COMMIT else {}),
     })
 )
 
@@ -435,6 +459,16 @@ app = modal.App(f"provael-libero-{STAGE}", image=image)
 
 @app.function(
     gpu="L4",
+    # No `cpu=` reservation, and that is a MEASURED choice, not an oversight. Modal reserves 0.125
+    # cores per container by default, and the pipeline is CPU-heavy (MuJoCo, EGL rendering,
+    # tokenisation), so the obvious lever on the 0.77 s/step the committed L4 shards averaged was
+    # `cpu=4` (+$0.19/h). Tried on 14 Sep 2026 (run 34832653162): the `timing` stage took 245 s
+    # for setup + one 217-step episode against 174 s for setup + one episode on the default
+    # reservation — no speed-up, if anything slower, within one-episode noise. The default
+    # reservation evidently bursts to what this pipeline needs; the 0.39 s/step a 24-core
+    # workstation reached the same day is a faster CPU, not more of one. Re-test with a
+    # multi-episode stage before reserving cores again; a one-episode datum cannot separate
+    # setup from the marginal rate, which is exactly what the `probe` stage exists for.
     timeout=int(CFG["timeout"]),
     volumes={"/runs": volume, "/cache": cache},
 )

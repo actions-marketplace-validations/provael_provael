@@ -386,6 +386,19 @@ _NAMED_SUBSETS: dict[tuple[str, str], str] = {
     ("docs/studies/eai04-action-space-transfer.md", "four EAI04 attacks"): (
         "the EAI04 subset, not the registry"
     ),
+    ("docs/errata.md", "16 families"): (
+        "E-2026-09 quotes the superseded count the website published between 1 and 3 September "
+        "2026; an erratum must name the wrong number to record it. Historical, must not be updated"
+    ),
+    ("docs/errata.md", "42 registered attacks"): (
+        "E-2026-09/E-2026-10 state the registry as it stood on 13 Sep 2026 (42 attacks, before "
+        "the scrambled_text and roleplay_no_target controls of 14 Sep); an erratum's numbers are "
+        "the numbers of its day"
+    ),
+    ("docs/errata.md", "38 attacks"): (
+        "E-2026-09 quotes the superseded count the website published between 1 and 3 September "
+        "2026; an erratum must name the wrong number to record it. Historical, must not be updated"
+    ),
     ("docs/errata.md", "six attacks"): (
         "how many attacks recorded a trajectory in ONE run — the 6 September canary, whose "
         "seventh arm (mcp_tool_desc) has no surface in a direct LIBERO loop and wrote none. A "

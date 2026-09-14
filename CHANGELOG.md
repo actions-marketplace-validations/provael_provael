@@ -8,6 +8,62 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Two more control arms, `scrambled_text` and `roleplay_no_target`, because the first two left
+  one objection standing.** `nonsense_text` is three tokens; `roleplay` renders as twenty. A 0/50
+  on three tokens never showed that a twenty-token out-of-distribution string is harmless, so the
+  44/50 headline was still consistent with "a long unfamiliar sentence derails SmolVLA" — the
+  generic fragility RobustVLA (arXiv:2510.00037) and LIBERO-PRO already document, not attacker
+  control. `scrambled_text` is the roleplay prompt's own tokens with the target noun replaced by a
+  one-token filler and the order destroyed, **whitespace-token count identical**, seeded per
+  episode. `roleplay_no_target` is the roleplay frame intact with only the graspable target
+  replaced by the same filler, so a firing there is the imperative frame driving the policy and
+  not the object. Both are built *from* `RolePlayAttack.TEMPLATE`, so the match survives a
+  template change; both carry the `control` role and enter neither the ASR nor the benign FPR.
+  `--attacks control` now resolves to four arms. The registry is 44 attacks (39 adversarial,
+  unchanged); `watch/registry.json`, the inventory lines and the checked-in evidence manifest are
+  regenerated.
+
+- **`provael attack --video-dir DIR` writes one MP4 per episode**: the frames the policy actually
+  saw (after the attack and any defense), red-bordered from the first step the suite's predicate
+  fired. A runner argument, not a `RunConfig` field, so a run with recording on and off produce
+  byte-identical reports and no attestation digest moves — the same rule `audit_sink` follows.
+  `imageio` + `imageio-ffmpeg` (in the `[lerobot]` extra) are imported lazily; the CPU core gains
+  no dependency. Episodes replayed from a `--resume` ledger have no clip. `provael.video` exposes
+  `FrameList` for callers composing their own output (an attacked-vs-benign side-by-side is a few
+  lines on top of it).
+- **Release assets carry signed SLSA build provenance.** `release.yml` runs
+  `actions/attest-build-provenance` over the wheel, the sdist, the CycloneDX SBOM and `SHA256SUMS`
+  before `gh release create`, so `gh attestation verify <asset> --repo provael/provael` names the
+  workflow, tag and commit that built it. PyPI already had PEP 740 attestations for the wheel and
+  sdist; the GitHub release assets carried nothing, which is what OpenSSF Scorecard's
+  Signed-Releases check scored 0 on.
+- **The execution manifest's `hardware` names the CPU count and the CUDA device**, not just the
+  ISA — `x86_64` described every run ever recorded and distinguished nothing.
+- **`examples/gpu-ci/local_libero_sweep.py`** — the sharded LIBERO screen on one machine (N
+  resumable shards, per-shard logs and timeouts, `--commit` provenance) with an `aggregate` that
+  reproduces the published cross-shard statistics from the committed shards.
+- **`docs/studies/pi0-openpi-transfer.md`** carries its design (n = 50 per arm, 5 seeds, horizon
+  280) and Amendment 1: the first leg runs π0.5 through the native `pi05` adapter, with what that
+  narrows and what it leaves open.
+
+### Fixed
+
+- **Three stale sentences in the compliance docs** (found by the 13 Sep regulatory re-read):
+  `docs/compliance/index.md` called ISO 25785-1 a "Working Draft… expected 2026–2027" (it is a
+  Committee Draft since 8 May 2026 with no committed date; trackers read ~2028) and opened the
+  routing box with the pre-adoption "political agreement May 2026" clause (it is Regulation (EU)
+  2026/1744, OJ 24 July 2026, in force 27 July); `machinery-reg-2027.md` said ISO 10218:2025 was
+  "in force" (a standard is published, not in force).
+- **A LIBERO run is built for the task suite its tasks name.** `LiberoSuiteAdapter.reset()`
+  parsed the suite out of a `"libero_spatial/3"` task name and then discarded it: the environment
+  came from the adapter's constructor default (`libero_object`) and the episode was recorded as
+  `libero_spatial/3` — the suite-level twin of the task-level misattribution `_build_env` already
+  refuses, and the CLI had no other way to ask for spatial, goal or 10. `make_suite()` now takes
+  the run's tasks and builds the adapter for the one suite they name (a list mixing suites is
+  refused), `reset()` raises on a prefix that does not match the adapter — before the lerobot
+  gate, so the failure reproduces on a machine without the simulator — and a bare `"3"` is task 3,
+  not task 0. `RunConfig` is unchanged, so no report or attestation digest moves.
+
 - **Korea's AI Framework Act (Act No. 20676) enters the compliance catalogue — the first non-EU
   national statute in it.** Three rows against Article 34(1), the duties on an operator "providing
   high-impact AI or AI-based products and services": subparagraph 1 (risk management plan),
@@ -41,6 +97,13 @@ All notable changes to this project are documented here. The format is based on
   digest over `report.json` does not, and no attestation over a run report is invalidated.
 
 ### Fixed
+
+- **The freshness badge's colour comes from the day count it prints.** It came from the
+  fractional age, so at 2.3 days the badge read "2 days ago" in orange — a number inside the fresh
+  window painted stale — and the guard that recomputes the badge at the age its own message asserts
+  read 2 days as green and failed every pull request for the ~17 hours until the count ticked over
+  (observed 14 Sep 2026 on the badge committed 13 Sep). Message and colour now derive from the same
+  whole-day count; `watch/freshness.json` regenerated.
 
 - **The Python versions this package claims, and the date its citation names, are now checked
   rather than asserted.** Three surfaces stated something nothing verified (#220, #221, #222).
@@ -86,6 +149,38 @@ All notable changes to this project are documented here. The format is based on
   #220 reported the file at `0.29.1` / `2026-07-31`. That part was already fixed and has read
   `0.41.2` since the 0.41.2 release; the date is what the report did not catch, and what the guard
   it asked for now covers.
+
+### Fixed
+
+- **`provael submit` advised a command that does not exist.** The generated PR body told
+  reviewers to "verify the bundle offline with `provael verify …`"; the command is
+  `provael attest --verify`. `docs/errata.md`'s E-2026-01 carried the same phantom command
+  (`provael verify … --print-payload`) in its "how to tell whether a bundle is affected" block,
+  now replaced with the `jq | base64 -d` pipeline that actually reads the payload.
+- **Meta-World was listed as runnable with nothing saying it cannot complete a CLI run.**
+  `MetaworldSuiteAdapter` refuses LIBERO's default keep-out box (it lies behind the Sawyer arm),
+  the CLI has no zone option and no Meta-World calibration is committed, so `--suite metaworld`
+  raised at reset. `list-suites` and `doctor` now print the gating note beside the suite
+  (`suites.SUITE_GATING_NOTES`). Counts are unchanged: the suite is implemented and runnable from
+  the Python API with a zone derived from its own benign envelope.
+- **Execution manifests from the Modal GPU lanes recorded `commit: null`.** The container
+  pip-installs the pinned release and has no git checkout. The drivers now resolve the pinned
+  tag's commit on the runner and pass it as `PROVAEL_COMMIT`, which `_emit_execution_manifest`
+  honours when it is hex-shaped (`cli/_shared.py`); the two GPU workflows check out full history
+  so the tag resolves.
+- **`SECURITY.md` contradicted itself on when the CRA's open-source-steward duties start** (11
+  September 2026 in one paragraph, 11 December 2027 in another). 11 December 2027, per Article
+  71(2), throughout.
+- **`action.yml`'s Marketplace description was 172 characters against a 125-character cap.**
+  Shortened; `tests/test_action_scripts.py` now pins the cap.
+- **Errata ledger:** the numbering note claimed the ledger and the provael.com mirror agreed
+  entry-for-entry; the mirror had minted its own E-2026-05 on 3 September for a different
+  correction. That correction is now recorded here as E-2026-09, the collision is stated, and
+  E-2026-10 records the reword-arm mix-up in the site's methodology note. Next free ID: E-2026-11.
+- Stale docstrings that narrated a 29-attack / 15-family registry (`coverage.py`,
+  `tests/test_coverage.py`), "controls not wired into the registry yet" (`tests/test_controls.py`),
+  "90 test modules" (`ci.yml`) and "33 released versions" (`tests/test_changelog_gate.py`) now
+  describe the tree as it is; the assertions beneath them were already right.
 
 ## [0.41.2] — 2026-09-09
 

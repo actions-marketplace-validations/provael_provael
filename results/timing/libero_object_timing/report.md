@@ -6,7 +6,7 @@
 
 | field | value |
 | --- | --- |
-| tool version | `0.40.0` |
+| tool version | `0.41.2` |
 | policy | `smolvla` |
 | suite | `libero` |
 | attacks | `none` |

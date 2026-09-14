@@ -1,9 +1,10 @@
 """The coverage counter: one source for every published count, with validation attached.
 
 THE MISTAKE THIS GUARDS AGAINST, WHICH HAS ALREADY BEEN MADE ONCE FROM THE OUTSIDE.
-`len(ATTACKS)` is 29 and it is tempting to read that as 29 families. It is not: 28 adversarial
-attacks plus one benign control, grouping into 15 adversarial families. A reader who takes the
-dict length as a family count overstates coverage by 14 — an error in the direction that flatters
+`len(ATTACKS)` is the attack count (42 today) and it is tempting to read it as a family count. It
+is not: 39 adversarial attacks plus the baseline and two controls, grouping into 17 adversarial
+families. A reader who takes the dict length as a family count overstates coverage by more than
+double — an error in the direction that flatters
 the project, which is the direction this repo is least willing to be wrong in. Both numbers are
 therefore published, each labelled, and asserted distinct below.
 
@@ -52,11 +53,16 @@ def test_attacks_and_families_are_not_the_same_number() -> None:
     """
     c = coverage()
     assert c.adversarial_attacks > c.adversarial_families
-    # THREE non-adversarial attacks now, not one: the benign `none` baseline plus the two
-    # harmless-variation controls (`benign_reword`, `nonsense_text`). Two non-adversarial FAMILIES,
-    # `baseline` and `control`. Hardcoding +1 was correct while `none` was the only control arm and
-    # became wrong the moment a second kind of control existed.
-    assert c.attacks_total == c.adversarial_attacks + 3
+    # FIVE non-adversarial attacks now, not one: the benign `none` baseline plus the four
+    # harmless-variation controls (`benign_reword`, `nonsense_text`, and since 14 Sep 2026 the
+    # length-matched `scrambled_text` and frame-only `roleplay_no_target`). Two non-adversarial
+    # FAMILIES, `baseline` and `control`. Hardcoding +1 was correct while `none` was the only
+    # control arm and became wrong the moment a second kind of control existed — so the count is
+    # read from the registry's own control family rather than typed again.
+    from provael.attacks.registry import FAMILIES
+
+    assert c.attacks_total == c.adversarial_attacks + 1 + len(FAMILIES["control"])
+    assert len(FAMILIES["control"]) == 4
     assert c.families_total == c.adversarial_families + len(NON_ADVERSARIAL_FAMILIES)
 
 
