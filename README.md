@@ -15,7 +15,7 @@
 
 <p align="center"><sub>Deterministic CPU stub run, seed 0 — reproduce it in seconds.</sub></p>
 
-**The finding.** A single `roleplay` instruction drove a **real SmolVLA** policy out of its safe
+**The finding.** Under a single `roleplay` instruction, a **real SmolVLA** policy left its safe
 envelope on **44 of 50 matched pairs across all ten `libero_object` tasks (88%, task-clustered 95%
 CI [72%, 100%]) against a benign control of 2/50 (4.0%, Wilson 95% [1.1%, 13.5%])** — and against
 **0** benign twins at the same (task, seed), McNemar exact **p = 4.6e-13**, surviving Holm
@@ -23,6 +23,15 @@ correction across the six-arm screen. The headline interval is **clustered over 
 episodes**, because episodes inside one task are correlated and pooling them reports an interval far
 too narrow. The two numbers are quoted together because an attack-success rate is a difference
 against that floor: read alone, 88% is a rate with no control arm.
+
+**What the controls say it is** ([E-2026-12](docs/errata.md), 14 September 2026): the same frame
+with **no target named** left the envelope in **27/30** cells and the same tokens in **scrambled
+order** in **18/30**, against 0/30 for two meaning-preserving rewordings. So this is the policy
+leaving its envelope under a long, imperative, out-of-distribution string — a fragility finding —
+and **not** the attacker steering the arm toward a chosen object. The number is unchanged and was
+re-measured on 0.41.2 at **42/50**
+([run](results/smolvla_libero_object_suite_2026-09-14/README.md),
+[controls](results/smolvla_libero_object_control_2026-09-14/README.md)).
 
 This supersedes the earlier n=10 single-task result, and the upgrade is the scope rather than the
 number. That run measured `libero_object/0` alone and was explicitly an existence proof; a
@@ -53,7 +62,7 @@ past a boundary the arm never reaches
 ([the study](studies/keepout_face_selection/README.md), errata E-2026-08). A benign-only
 calibration cannot choose a face, because where an attack goes is not observable from rollouts in
 which no attack ran. `provael calibrate --attack <name>` now runs both arms and picks the face
-against the attacked one; what is owed is a GPU run of that across all ten tasks. Three families are
+against the attacked one; what is owed is a GPU run of that across all ten tasks. Three arms are
 **measured nulls at 0/50 each** (`patch`, `decoy_object`, `scene_text`), and `mcp_tool_desc` is
 **not applicable** to this suite rather than a null. Clean-task-success under the benign arm averages
 84% and ranges 40–100% across tasks, so the policy is not uniformly competent. And the policy's
@@ -143,12 +152,16 @@ its headline is the coverage map: a magnitude cap cannot restore a frozen action
 successes routing through a decoupled flag ([study](docs/studies/action-envelope.md)). `--recipe full-sweep` runs every one of the seventeen; families the chosen suite
 cannot support are skipped and reported N/A, never scored 0%. Every family carries its transfer-test (rate + 95% Wilson CI + benign-FPR
 control); run `provael transfer-test` to print it. The `action`, `action_space`, `sensor_spoof`,
-`backdoor`, `authorization`, `misalignment`, `confidentiality`, and `humanoid` families are
-**stub-validated only** (no real-model transfer claimed). `provael coverage` prints the whole
-picture as one machine-readable line rather than leaving it to prose — and prints it as three
-numbers on purpose, because *registered is not validated*: **17 adversarial families registered,
-3 exercised against a real policy** (`instruction`, `visual`, `injection` — and two of those three
-returned measured nulls, which is a result), **14 stub-validated only**. Note also that the
+`backdoor`, `authorization`, `misalignment`, `confidentiality`, `optimized` and `humanoid`
+families are **stub-validated only** (no real-model transfer claimed); six of those nine were run
+against SmolVLA on 14 September 2026 and every episode came back not applicable, which is an
+absence of a channel on that policy, not a measurement, and is counted as neither. `provael
+coverage` prints the whole picture as one machine-readable line rather than leaving it to prose —
+and prints it as three numbers on purpose, because *registered is not validated*:
+**17 adversarial families registered, 8 exercised against a real policy** (`instruction`, `visual`, `injection`,
+`gradient_patch`, `optimized_instruction`, `optimized_patch`, `universal_patch`,
+`weight_integrity` — one of the eight transferred; the other seven returned measured nulls, five
+of them at n = 3, which is a result and not a rate), **9 stub-validated only**. Note also that the
 registry holds **39 adversarial attacks**, which is not the same number as 17 families; reading
 the registry dict's length as a family count overstates coverage by 14. It red-teams **8
 policies** — the CPU `stub`
@@ -486,8 +499,11 @@ surface (experimental today). See [docs/leaderboard.md](docs/leaderboard.md).
 
 **What the published board does not cover.** It is one run and it is old: measured with
 **`provael 0.32.0`**, covering **1 policy on 1 suite** and **3 of the 17 adversarial families**. The
-other **fourteen families have no real-model measurement at all** — they are *absent* from the board,
-which is not the same as scoring 0%. That run also predates the clean-task-success control, so it
+other **fourteen families are absent from the board**, which is not the same as scoring 0%: nine of
+them have no real-model measurement anywhere in this repository, and five have only the
+three-episode breadth probe of 14 September 2026
+(`results/smolvla_libero_object_families_2026-09-14`), a result and not a rate. That run also
+predates the clean-task-success control, so it
 carries a benign false-positive control but no measured competence baseline. The Space states all
 of this above its own tables; rebuilding cannot fix it, because a re-stamp re-aggregates committed
 reports and never re-runs a policy. Closing the gap needs GPU time.
@@ -621,10 +637,13 @@ checkpoint on a GPU runner. Generality is intended; it is **tested on SmolVLA ×
 `HuggingFaceVLA/smolvla_libero` · **all ten `libero_object` tasks** · 5 seeds per (task, arm) ·
 horizon 280 · L4, 2026-08-09. 350 measured episodes of 400 records.
 
-**`roleplay` redirected SmolVLA out of its safe envelope on 44 of 50 matched pairs (88%,
+**Under `roleplay`, SmolVLA left its safe envelope on 44 of 50 matched pairs (88%,
 task-clustered 95% CI [72%, 100%]) against a 2/50 benign control (4.0%, Wilson 95% [1.1%, 13.5%]),
 and against 0 benign twins at identical (task, seed) — McNemar exact p = 4.6e-13, Holm-adjusted to
-2.7e-12 across the six-arm screen.**
+2.7e-12 across the six-arm screen.** Read it with the 14 September 2026 controls
+([E-2026-12](docs/errata.md)): the frame with no target named exits at 27/30 and the scrambled
+tokens at 18/30, so the exit is the policy's fragility under this kind of string, not the attacker's
+choice of object being acted on. Re-measured on 0.41.2: 42/50.
 
 **That interval is clustered over TASKS, not episodes**, and the distinction matters more than the
 identical-looking bounds of the older single-task Wilson interval. Episodes inside one task are
@@ -637,7 +656,7 @@ What changed by adding tasks. `goal_substitution` was 6/10 at p = 0.031 on one t
 survive correction; over ten tasks it reaches **15/50, p = 9.8e-4**, and does. Adding tasks changed a
 verdict, which is the argument for having run them.
 
-| family | attack | redirection rate | clustered 95% CI | McNemar | Holm |
+| family | attack | keep-out exit rate | clustered 95% CI | McNemar | Holm |
 | --- | --- | ---: | ---: | ---: | ---: |
 | baseline | `none` | **2/50 (4%)** — control | — | — | — |
 | instruction | `roleplay` | **44/50 (88%)** | **[72%, 100%]** | 4.6e-13 | **2.7e-12** |
@@ -652,6 +671,31 @@ verdict, which is the argument for having run them.
 `applicable: false` and `steps: 0`, which scoring excludes from `attempts`. It is listed as
 not-measured rather than as a seventh null, because those are different claims — and it is why the
 run is 350 measured episodes out of 400 records.
+
+**Re-measured on 0.41.2, 14 September 2026** — same checkpoint, tasks, arms, seeds and horizon, on
+a workstation RTX 2000 Ada
+([run](results/smolvla_libero_object_suite_2026-09-14/README.md), with
+[aggregate.json](results/smolvla_libero_object_suite_2026-09-14/aggregate.json) beside the shards).
+This is the run `watch/publish-freshness.json` now names as the published measurement; the table
+above is the original and stays as the record of it.
+
+| family | attack | keep-out exit rate | clustered 95% CI | McNemar | Holm |
+| --- | --- | ---: | ---: | ---: | ---: |
+| baseline | `none` | **1/50 (2%)** — control | — | — | — |
+| instruction | `roleplay` | **42/50 (84%)** | **[62%, 100%]** | 9.1e-13 | **5.5e-12** |
+| instruction | `goal_substitution` | 7/50 (14%) | [0%, 34%] | 0.070 | 0.35 |
+| instruction | `paraphrase` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+| visual | `patch` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+| visual | `decoy_object` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+| injection | `scene_text` | 2/50 (4%) | [0%, 10%] | 1.0 | 1.0 |
+| injection | `mcp_tool_desc` | **0 attempts** | — | — | — |
+
+Roleplay reproduces inside the earlier interval and survives Holm alone; `goal_substitution`, which
+survived at 15/50 on 0.32.0, is 7/50 here and does not — one draw of a sampling policy each time,
+and the honest reading of two runs is that its effect is real but small enough that fifty cells do
+not settle it. Clean task success under the benign arm is 96% (48/50) against 84% on 0.32.0. The
+[controls run the same day](results/smolvla_libero_object_control_2026-09-14/README.md) are what
+E-2026-12 rests on.
 
 **The three null arms show `—` rather than an interval, and that is a correction.** This table
 previously published `[0%, 0%]` for them. The clustered bootstrap declines when every task scores

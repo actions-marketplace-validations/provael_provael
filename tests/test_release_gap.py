@@ -17,6 +17,7 @@ from __future__ import annotations
 from provael.watch import (
     STALE_AFTER_RELEASES,
     MeasurementRecord,
+    _semver,
     campaigns,
     displacement,
     published_measurement,
@@ -119,18 +120,33 @@ def test_the_window_matches_the_one_the_site_publishes() -> None:
     assert STALE_AFTER_RELEASES == 2
 
 
-def test_the_committed_ledger_is_past_the_window_today() -> None:
-    """The live state, asserted so a re-measurement that closes the gap is noticed rather than assumed."""
+def test_the_committed_ledger_is_inside_the_window_today() -> None:
+    """The live state, asserted so a change in it is noticed rather than assumed.
+
+    From 8 September to 18 September 2026 this test asserted the opposite: the published
+    measurement was v0.32.0, nine minors behind, and the assertion existed so that a real
+    re-measurement closing the gap would be noticed as news. On 14 September a workstation re-ran
+    the ten-task suite on 0.41.2 (`results/smolvla_libero_object_suite_2026-09-14`, roleplay 42/50
+    against the published 44/50) with its controls beside it, and the branch that landed them on
+    18 September moved the published measurement to 0.41.2. The gap is zero, the banner clears on
+    its own, and this test now guards the new state: a release that reopens the window past
+    STALE_AFTER_RELEASES without a re-measurement will fail here, which is the correct time to be
+    told.
+    """
     from provael import __version__
 
     got = published_measurement()
     assert got is not None, "no real measurement is committed"
+    assert got.tool_version == "0.41.2", (
+        f"the published measurement is v{got.tool_version}; if a larger real campaign landed at a "
+        "newer version, update this test and the CHANGELOG — the measurement moving is news"
+    )
     gap = releases_behind(got.tool_version, __version__)
     assert gap is not None
-    assert gap > STALE_AFTER_RELEASES, (
-        f"the published measurement (v{got.tool_version}) is now {gap} release(s) behind "
-        f"{__version__}, within the {STALE_AFTER_RELEASES}-release window. If a real re-measurement "
-        "landed, update this test and the CHANGELOG — the gap closing is news."
+    assert gap <= STALE_AFTER_RELEASES, (
+        f"the published measurement (v{got.tool_version}) is {gap} release(s) behind {__version__}, "
+        f"past the {STALE_AFTER_RELEASES}-release window again. Releases have outrun the "
+        "re-measurement; the scheduled campaign (studies/scheduled_campaign) is what closes it."
     )
 
 
@@ -302,17 +318,22 @@ def test_a_task_suite_is_read_off_the_task_ids() -> None:
     assert task_suite_of(("libero_object/0", "3")) is None
 
 
-def test_the_committed_ledger_has_a_challenger_that_cannot_yet_displace() -> None:
-    """The live state: the canary body exists, is newer, and is short on both axes.
+def test_the_committed_ledger_publishes_the_0_41_2_object_body() -> None:
+    """The live state: the 14 September 2026 re-measurement superseded the 0.32.0 campaign.
 
-    Asserted structurally rather than by number, because every scheduled run changes the numbers
-    and this test must stay true while the lane does its job. What must NOT change without a
-    deliberate edit here: that a challenger exists at all, and that it is not yet the published
-    measurement. The day it is, the site re-pins and this test is rewritten — that is the news.
+    Asserted structurally rather than by number, because the body grows as runs land and the
+    scheduled lane's shards will appear beside it. What must NOT change without a deliberate edit
+    here: that the published body is the ten-task Object lineage at 0.41.2, and that anything
+    challenging it is the same lineage at a newer version. The day a challenger supersedes it, the
+    site re-pins and this test is rewritten — that is the news.
     """
     standing = displacement()
     assert standing is not None
-    assert standing.published.tool_version == "0.32.0"
+    assert standing.published.lineage == ("smolvla", "libero", "libero_object")
+    assert standing.published.tool_version == "0.41.2"
     assert standing.published.tasks == TEN_TASKS
-    assert standing.challenger is not None, "no re-measurement is committed at a newer version"
-    assert standing.attempts_needed is not None and standing.attempts_needed > 0
+    assert standing.published.attempts >= 656, "the 14 September body shrank; a run was dropped"
+    if standing.challenger is not None:
+        assert standing.challenger.lineage == standing.published.lineage
+        assert _semver(standing.challenger.tool_version) > (0, 41, 2)
+        assert standing.attempts_needed is not None

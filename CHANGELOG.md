@@ -8,12 +8,62 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **The published measurement was re-run on a current release, and it reproduces.** Eight
+  results directories from the office workstation (RTX 2000 Ada, 14 September 2026) land under
+  `results/*_2026-09-14`, each with its own generated README and a hand-written `NOTES.md`. The
+  ten-task SmolVLA × LIBERO-Object suite on provael 0.41.2: `roleplay` 42/50 against the published
+  44/50, floor 1/50, clean task success 96 %; the ten-task control run; the three LIBERO suites the
+  headline had never been measured on (Spatial and Goal: `roleplay` 0/30 and `none` 0/30 each, clean
+  success 77 %; LIBERO-10: three of ten shards so far, 0/9); a breadth probe of every runnable
+  family on one task at three seeds (only the instruction family fired; the weight-flip ladder,
+  `gradient_patch`, the visual, patch and action families 0/3 each, N/A where the policy has no
+  channel); the first π0.5 rollouts through the native `pi05` adapter (benign 10/10, 0.39 s/step);
+  and the demonstration clip's measured pair. With these committed, the Object body of real runs at
+  0.41.2 (the suite, its control run, the breadth probe, the clip and the canary: 656 attempts over
+  the same ten tasks) covers and exceeds the 0.32.0 campaign under `provael.watch.displacement`,
+  so `watch/publish-freshness.json` reads `measuredWith: 0.41.2`, `releasesBehind: 0`,
+  `isStale: false`, and `test_the_committed_ledger_is_inside_the_window_today` now guards the
+  closed window rather than the open one. The Spatial, Goal and LIBERO-10 runs are their own
+  lineages (`Campaign.task_suite`) and neither join that body nor raise its bar. The scheduled
+  lane's plan is re-modelled on the new body before its first shard: eight seeds, 880 planned
+  attempts against 656, the margin left for the 0.41.2 runs still to land from the workstation.
+  The ledger grows from 31 rows to 79. The website re-pins to the new suite in its own sweep.
+
+### Changed
+
+- **The 44/50 result is no longer described as the attack redirecting the policy (E-2026-12).**
+  The control run of 14 September 2026 shows the roleplay frame with no target named exiting the
+  envelope in 27/30 cells and the roleplay prompt's own tokens in destroyed order in 18/30, against
+  0/30 for two meaning-preserving rewordings. The number stands and was reproduced; the reading
+  changes: SmolVLA leaves its safety envelope under a long, imperative, out-of-distribution string,
+  which is a fragility finding about the policy and not a demonstration that the attacker's chosen
+  object is acted on. The README's finding paragraph and results section, the cross-architecture
+  findings page and the status of the semantic-vs-mechanical page say so now, and the erratum
+  records the sentence that was wrong and the falsification clause that was written too narrowly
+  to catch it.
+
+- **A family counts as exercised against a real policy only with an applicable episode.**
+  `provael.coverage` counted a family the moment any real-policy report contained it, whatever the
+  episode said. The 14 September breadth probe ran every runnable family against SmolVLA, and eight
+  came back with every episode marked not applicable — the policy has no channel those attacks
+  reach — which would have moved the published figure from 3 families to 16 on runs that measured
+  nothing. The counter now requires at least one applicable episode: **8 of 17 adversarial families
+  exercised against a real policy** (`instruction`, `visual`, `injection`, `gradient_patch`,
+  `optimized_instruction`, `optimized_patch`, `universal_patch`, `weight_integrity`; one
+  transferred, seven are measured nulls, five of those at n = 3), **9 stub-validated only**, six of
+  which were run and found not applicable — an absence of a surface, which is neither a measurement
+  nor untested. `watch/registry.json`, the README breakdown and the counted-claims guard move with
+  it, and the sentences that restated "three families" and "fourteen families" as facts about the
+  registry are rewritten or, where they describe a study's own run or a board, named as such.
+
+### Added
+
 - **The white-box arm is registered and priced, not run.** `whitebox-pilot` joins the stages of
   `examples/gpu-ci/modal_libero_suite.py` and the `gpu-arm.yml` dispatch list: `weight_integrity`
   (the ten-rung flip ladder) and `gradient_patch` against the real SmolVLA x LIBERO adapter, 2 tasks
   x 12 arms x 2 seeds, hard ceiling ~$4.00 from `scripts/gpu_arm_plan.py`. It needs provael 0.42.0 in
-  the image, it is dispatched by hand and never scheduled, and `realPolicyTested` stays 3 of 17 until
-  its result is read and committed. While registering it: the Modal recipe's docstring had said for
+  the image, it is dispatched by hand and never scheduled, and registering it moves no figure: the
+  registry counts committed results, not priced arms. While registering it: the Modal recipe's docstring had said for
   several releases that sharding "composes with `--resume`", and the container command never passed
   the flag; it does now, with the ledger beside the report on the Volume.
 - **UN Regulation No. 155 and ISO/SAE 21434:2021 enter the compliance catalogue.** Five rows, all
@@ -199,9 +249,10 @@ All notable changes to this project are documented here. The format is based on
   and `watch/measurements.json` rows carry the run's `tasks`; `watch/publish-freshness.json`
   gains `published` (the body behind `measuredWith`, with its `taskSuite`) and `challenger` (the
   newer body nearest to superseding it, with `attemptsNeeded` and `tasksMissing`); `provael
-  doctor` prints the same as a `re-measurement` row. On the committed tree the challenger is the
-  0.41.2 canary body: 43 of 550 attempts, one task of ten. Existing fields and their meanings are unchanged, so the site's
-  reader needs nothing.
+  doctor` prints the same as a `re-measurement` row. On the committed tree the published body is
+  the 0.41.2 Object body of 14 September 2026 (656 attempts over ten tasks) and nothing newer
+  challenges it yet; the lane's first shards at the next pin will appear there. Existing fields and
+  their meanings are unchanged, so the site's reader needs nothing.
 
 - **The scheduled GPU lane measures a declared campaign, shard by shard, instead of a probe.** Each
   `gpu-scheduled.yml` run measured one task, eight arms, two seeds: sixteen episodes that fed the
@@ -210,22 +261,25 @@ All notable changes to this project are documented here. The format is based on
   run, in a version bucket that reset every time a release re-pinned it. It measured on the current
   release twice a week and could not have displaced the published campaign this decade, while its
   own header priced that at a seventh of the credit. `studies/scheduled_campaign/plan.json` now
-  declares the grid: the same checkpoint, suite, ten tasks and horizon as the 0.32.0 body (read out
-  of its committed shards, and held to them by `tests/test_campaign.py`), every arm it ran plus the
-  `control` family, six seeds, so the completed campaign exceeds 550 attempts rather than tying
-  them. Sixty (task, seed) shards, one Modal L4 container each, twelve episodes, inside a 45-minute
+  declares the grid: the same checkpoint, suite, ten tasks and horizon as the published body (read
+  out of its committed shards, and held to them by `tests/test_campaign.py`), every arm it ran plus
+  the `control` family, and enough seeds that the completed campaign exceeds the published attempts
+  rather than tying them — declared against the 0.32.0 body with six seeds, re-modelled the same
+  day on the 0.41.2 Object body with eight (880 planned against 656), before any shard ran. Eighty
+  (task, seed) shards, one Modal L4 container each, twelve episodes, inside a 45-minute
   timeout; `provael.campaign.next_shards` selects the next five from what is committed under
   `results/gpu-scheduled/campaign-<pin>/`, so a missed run costs a week and not correctness and a
   re-run of a slot that already landed selects the shards after it. The cadence stays Tuesday and
   Friday, which the age badge derives; at five shards a run the ceiling is $3.00 a run and $26.05 a
   month of the $30 credit (`tests/test_gpu_scheduled_plan.py` holds it), about $1.98 a run
-  expected, twelve runs, six weeks. Shards that raise no longer take the run with them: the ones
+  expected, sixteen runs, eight weeks. Shards that raise no longer take the run with them: the ones
   that landed are recorded and committed, then the job fails naming the rest. The pin is held for
   the campaign (`tests/test_gpu_image_pin.py` allows it to lag while a challenger accumulates there
   and requires every lane to pin the same version); do not bump it in a release PR while
   `publish-freshness.json` shows a challenger at it. Stated in the workflow header rather than
   implied: at the August-to-September cadence of nine minors in thirty-two days, the campaign
-  completes about a dozen minors behind. The lane makes the number move; it cannot make it current.
+  completes a dozen or more minors behind. The lane makes the number move; it cannot make it
+  current.
 
 ### Added
 
