@@ -117,6 +117,12 @@ def test_requirement_mapping_is_complete_and_ordered() -> None:
         # per subparagraph: 34(1)2, 34(1)3 and 34(1)6 have no on-point Provael signal, and mapping
         # them anyway would read as coverage of the whole Article.
         "korea-ai-framework",
+        # The automotive cybersecurity regime: UN R155 (three rows — the CSMS testing process,
+        # the exhaustive risk assessment, the testing before approval) and ISO/SAE 21434 (two rows
+        # — TARA methods and product-development verification). Clause 11 vehicle-level validation
+        # and the R155 mitigation / detection / cryptography paragraphs are deliberately absent: a
+        # simulated result about one learned component produces nothing on-point for them.
+        "un-r155", "iso-sae-21434",
     }
     for entry in cr.entries:
         assert entry.provael_signal
@@ -150,7 +156,9 @@ def test_gap_detection_uncalibrated() -> None:
         # it from a run that never touched the action channel would cite a measurement nobody made.
         "korea-ai-framework:art34-human-supervision",
     }
-    assert cr.summary == {"evidence-present": 13, "gap": 11}
+    # 18 present: the five automotive rows (UN R155 × 3, ISO/SAE 21434 × 2) name no on-point
+    # family, so like the taxonomy rows they are present once any EAI-tagged attack ran.
+    assert cr.summary == {"evidence-present": 18, "gap": 11}
     # Every gap explains itself; every present entry has no gap reason.
     for entry in cr.entries:
         if entry.status == "gap":
@@ -186,7 +194,7 @@ def test_gap_detection_calibrated() -> None:
     assert by["eu-ai-act:art15"].status == "evidence-present"
     assert by["nist-ai-rmf:measure"].status == "evidence-present"
     assert by["eu-machinery:annex-i-part-a-6"].status == "evidence-present"
-    assert cr.summary == {"evidence-present": 15, "gap": 9}
+    assert cr.summary == {"evidence-present": 20, "gap": 9}
     # The gap names the missing family rather than the generic "no EAI-tagged attacks" reason.
     assert "EAI09" in (by["nist-ai-100-2:privacy"].gap_reason or "")
     # The measured evidence carries the calibrated control.
@@ -418,6 +426,42 @@ def test_cli_report_compliance_json_to_file(tmp_path: Path) -> None:
     data = json.loads(target.read_text(encoding="utf-8"))
     assert data["entries"]
     assert {e["framework_id"] for e in data["entries"]} >= {"eu-ai-act", "nist"}
+
+
+def test_korea_rows_reach_the_written_compliance_artifacts(tmp_path: Path) -> None:
+    """The statute has to be in the ARTEFACT a reader opens, not only in the source table.
+
+    The table-level tests above prove the mapping exists in `REQUIREMENTS`; this one drives the
+    CLI end to end and reads the JSON and Markdown it writes, so a regression anywhere between the
+    table and the file (a dropped framework in the emitter, a filtered entry, a renderer that skips
+    a row) fails here rather than in a user's evidence pack. The same three assertions are what the
+    post-publish smoke test runs against the installed wheel.
+    """
+    out = tmp_path / "run"
+    assert runner.invoke(app, ["attack", "--episodes", "2", "--out", str(out)]).exit_code == 0
+    json_target = tmp_path / "report.compliance.json"
+    md_target = tmp_path / "report.compliance.md"
+    for target in (json_target, md_target):
+        res = runner.invoke(
+            app, ["report", "--in", str(out), "--format", "compliance", "--out", str(target)]
+        )
+        assert res.exit_code == 0, res.output
+
+    data = json.loads(json_target.read_text(encoding="utf-8"))
+    korea = [e for e in data["entries"] if e["framework_id"] == "korea-ai-framework"]
+    assert [e["key"] for e in korea] == [
+        "korea-ai-framework:art34-risk-management",
+        "korea-ai-framework:art34-human-supervision",
+        "korea-ai-framework:art34-documentation",
+    ]
+    assert [e["control_id"] for e in korea] == ["Article 34(1)1", "Article 34(1)4", "Article 34(1)5"]
+    assert {e["framework"] for e in korea} == {"Korea AI Framework Act (Act No. 20676)"}
+    assert all(e["indicative"] is True for e in korea), "the statute rows are indicative, never determinative"
+
+    markdown = md_target.read_text(encoding="utf-8")
+    assert "Korea AI Framework Act (Act No. 20676)" in markdown
+    for control_id in ("Article 34(1)1", "Article 34(1)4", "Article 34(1)5"):
+        assert control_id in markdown, f"{control_id} missing from the rendered Markdown"
 
 
 def test_cli_report_compliance_md_to_file(tmp_path: Path) -> None:

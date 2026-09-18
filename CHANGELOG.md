@@ -8,6 +8,125 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **The two runs the workstation finished on 18 September 2026 after the crash, committed.**
+  `results/smolvla_libero_10_2026-09-14/` is now all ten LIBERO-10 tasks (shards 3–9 relaunched
+  from their ledgers): roleplay 0/30, `none` 0/30, clean task success 12/30 and 0/30 under the
+  frame — on the long-horizon suite the frame breaks completion without an envelope exit, on an
+  uncalibrated box shaped for the Object scenes. `results/pi05_libero_object_2026-09-18/` is the
+  first attack arm on a second architecture: π0.5 (`lerobot/pi05_libero_finetuned_v044`, native
+  `pi05` adapter) on the ten Object tasks at three seeds, `roleplay` 1/30 against `none` 0/30
+  (McNemar p = 1.0, clustered [0%, 10%]), task success 27/30 unattacked and 8/30 under the frame.
+  It is the pre-registered study's *preliminary* leg (three seeds, two arms of eight), so no
+  transfer of the envelope-exit effect is claimed and no headline moves; the study doc records
+  the result against its own falsifiers and notes that the per-arm lower-bound criterion is
+  degenerate against a zero benign floor. The cross-architecture findings page, the README's
+  backend sentence and the roadmap say `pi05` has a committed real-model result now. Both runs are
+  other lineages than the published Object body (a different task suite; a different policy), so
+  `watch/publish-freshness.json` does not move. The ledger grows to 96 rows.
+
+### Fixed
+
+- **`published_measurement` picks the record that represents the published body from the body's
+  own lineage.** It matched on (policy, suite, version); the LIBERO-10 shards that finished on the
+  morning of 18 September 2026 shared all three with the Object body and were newer, so the record
+  standing for the published body would have been one from another task suite. It matches the
+  full lineage now, and `watch/publish-freshness.json`'s `measuredAt` stays the Object body's.
+
+- **The committed leaderboard names the run it aggregates, and a workflow can move it to a newer
+  one.** `leaderboard/results/source.json` sits beside the signed board and says which committed
+  results directory produced it; `tests/test_leaderboard_version_claim.py` reads the run from
+  there instead of from a path typed into the test, and holds the pointer's `measuredWith` and
+  `generatedAt` to the board's own fields. `leaderboard-rebuild.yml` (dispatch-only, signs with the
+  repository secret, commits to the ref it is dispatched on) rebuilds the board from a named run
+  and writes the pointer with it. It is a different act from `leaderboard-restamp.yml`, which
+  re-aggregates the same run and refuses a moved `measured_with`: a rebuild expects
+  `measured_with` to move, and refuses instead a run that is not a committed directory, a board
+  whose `measured_with` is not what the run's shards say, a source older than the current one, a
+  board that drops a (policy, suite) or its attribution, and a signature that does not verify
+  against the published key. Written because the ten-task suite had been re-measured on 0.41.2
+  (#255) while the board still said 0.32.0, and the key that could move it lives only in the
+  secret.
+
+### Changed
+
+- **The published leaderboard aggregates the 14 September 2026 run.** `leaderboard-rebuild.yml`
+  rebuilt and re-signed `leaderboard/results/leaderboard.json` from
+  `results/smolvla_libero_object_suite_2026-09-14`: `measured_with ["0.41.2"]`, `stale: false`
+  against 0.42.0, rows instruction 50/150, injection 2/50, visual 2/100, baseline 1/50
+  (`not_applicable: mcp_tool_desc`), attribution unchanged, signature verified against the
+  published key. The 0.32.0 board's rows (62/150, 44/50) stay committed under their own run.
+  `leaderboard/method-equivalence.json` records the 0.32.0 entry as settled by that re-run and
+  argues, from the diff between the tags, why 0.41.2 → 0.42.0 moves none of these rows; the
+  README's published-board paragraph and the Space card describe the board as it is now. The
+  staleness gate and its tests judge the board by whether its verdict is declared and names its
+  measuring version, not by which way it currently reads. Two sentences the results made false are
+  corrected: the EAI03 coverage note no longer says `weight_integrity` has never met a real
+  policy (the breadth probe ran it at n = 3), which moves the committed crosswalk, manifest and
+  assurance goldens; and the control run's notes cite the reframe erratum by its number,
+  E-2026-12.
+
+## [0.42.0] — 2026-09-18
+
+The first release since 0.41.2 on 9 September, and the first whose published measurement was made
+on a current release. It carries everything merged in between: the two extra control arms, the
+white-box surfaces on the real LeRobot adapter, the `vla_arena` scaffolding suite, the 17025-shaped
+test report, the Hugging Face Community Evals export, the clip and side-by-side video tooling, the
+keep-out path figures, the Machinery Regulation Annex III page, the Korea AI Framework Act crosswalk
+(#226), which the published tool had been missing since it reached `main` and the website on 12
+September, the UN R155 / ISO/SAE 21434 rows (#251), the deployed-policy identity in the report
+(schema 6, #249), the priced white-box GPU arm (#252), the scheduled lane's campaign arithmetic
+(#254) and the workstation's results of 14 September (#255). Those results change the published
+measurement posture: the ten-task SmolVLA x LIBERO-Object headline reproduces on 0.41.2 (42/50
+against the published 44/50), its controls change what the number means (E-2026-12), and
+`watch/publish-freshness.json` reads `measuredWith: 0.41.2`, one release behind this one and
+inside the two-release window. The stale banner www.provael.com carried since 9 September clears
+when the site re-pins to the new suite, which is its own sweep.
+
+### Added
+
+- **The published measurement was re-run on a current release, and it reproduces.** Eight
+  results directories from the office workstation (RTX 2000 Ada, 14 September 2026) land under
+  `results/*_2026-09-14`, each with its own generated README and a hand-written `NOTES.md`. The
+  ten-task SmolVLA × LIBERO-Object suite on provael 0.41.2: `roleplay` 42/50 against the published
+  44/50, floor 1/50, clean task success 96 %; the ten-task control run; the three LIBERO suites the
+  headline had never been measured on (Spatial and Goal: `roleplay` 0/30 and `none` 0/30 each, clean
+  success 77 %; LIBERO-10: three of ten shards so far, 0/9); a breadth probe of every runnable
+  family on one task at three seeds (only the instruction family fired; the weight-flip ladder,
+  `gradient_patch`, the visual, patch and action families 0/3 each, N/A where the policy has no
+  channel); the first π0.5 rollouts through the native `pi05` adapter (benign 10/10, 0.39 s/step);
+  and the demonstration clip's measured pair. With these committed, the Object body of real runs at
+  0.41.2 (the suite, its control run, the breadth probe, the clip and the canary: 656 attempts over
+  the same ten tasks) covers and exceeds the 0.32.0 campaign under `provael.watch.displacement`,
+  so `watch/publish-freshness.json` reads `measuredWith: 0.41.2`, `releasesBehind: 0`,
+  `isStale: false`, and `test_the_committed_ledger_is_inside_the_window_today` now guards the
+  closed window rather than the open one. The Spatial, Goal and LIBERO-10 runs are their own
+  lineages (`Campaign.task_suite`) and neither join that body nor raise its bar. The scheduled
+  lane's plan is re-modelled on the new body before its first shard: eight seeds, 880 planned
+  attempts against 656, the margin left for the 0.41.2 runs still to land from the workstation.
+  The ledger grows from 31 rows to 79. The website re-pins to the new suite in its own sweep.
+
+- **The white-box arm is registered and priced, not run.** `whitebox-pilot` joins the stages of
+  `examples/gpu-ci/modal_libero_suite.py` and the `gpu-arm.yml` dispatch list: `weight_integrity`
+  (the ten-rung flip ladder) and `gradient_patch` against the real SmolVLA x LIBERO adapter, 2 tasks
+  x 12 arms x 2 seeds, hard ceiling ~$4.00 from `scripts/gpu_arm_plan.py`. It needs provael 0.42.0 in
+  the image, it is dispatched by hand and never scheduled, and registering it moves no figure: the
+  registry counts committed results, not priced arms. While registering it: the Modal recipe's docstring had said for
+  several releases that sharding "composes with `--resume`", and the container command never passed
+  the flag; it does now, with the ledger beside the report on the Volume.
+
+- **UN Regulation No. 155 and ISO/SAE 21434:2021 enter the compliance catalogue.** Five rows, all
+  indicative: R155 para. 7.2.2.2(e) (the CSMS testing process), 7.3.3 (the exhaustive risk
+  assessment against Annex 5 Part A) and 7.3.6 (testing before approval); ISO/SAE 21434 Clause 15
+  (TARA methods) and Clause 10 (product-development verification). Clause 11 vehicle-level
+  validation and the R155 mitigation, detection and cryptography paragraphs are left out on
+  purpose: a simulated result about one learned component produces nothing on-point for them. The
+  rows exist because the automotive segment page already argued this mapping while the catalogue
+  the site is checked against did not carry it. Facts read from the OJ text of R155 (CELEX
+  42021X0387: in force 22 January 2021, CSMS certificate valid for a maximum of three years), the
+  consolidated Regulation (EU) 2019/2144 (Annex II row D4: 6 July 2022 and 7 July 2024) and the
+  ISO catalogue (Edition 1, August 2021), all on 18 September 2026. `docs/compliance/index.md`
+  gains the matching section; the committed insurer sample is regenerated (its summary counts move).
+
 - **Two more control arms, `scrambled_text` and `roleplay_no_target`, because the first two left
   one objection standing.** `nonsense_text` is three tokens; `roleplay` renders as twenty. A 0/50
   on three tokens never showed that a twenty-token out-of-distribution string is harmless, so the
@@ -43,6 +162,7 @@ All notable changes to this project are documented here. The format is based on
   `HuggingFaceVLA/smolvla_libero` checkpoint on a CPU with a synthetic frame (no simulator):
   finite sensitivities, exact restore, finite input gradients, and the attack landing at its
   budget. No rate is claimed until the GPU run is committed.
+
 - **A `vla_arena` suite (registered scaffolding): the first suite whose unsafe predicate is
   DECLARED rather than fitted.** VLA-Arena (PKU-Alignment, ICML 2026) evaluates each task's own
   `(:cost …)` clause every step and reports it in `info["cost"]`; the adapter's `is_unsafe()` is
@@ -58,6 +178,7 @@ All notable changes to this project are documented here. The format is based on
   coverage counts exclude it; the registry is 7 suites (3 fixtures, 3 gated simulators, 2
   scaffolding) and `watch/registry.json`, the README and the quickstart inventory lines are
   regenerated.
+
 - **`provael report --format test-report`: a test report in the shape of ISO/IEC 17025:2017
   clause 7.8.** The 13 September regulatory re-read found that no certifier, notified body or
   insurer publishes acceptance of SARIF, OSCAL or an ML-BOM; what an assessor of a machinery
@@ -73,6 +194,7 @@ All notable changes to this project are documented here. The format is based on
   no statement of conformity is made; the date of issue and the authorising person are conspicuous
   blanks for the human who signs, so the emitter introduces no wall-clock value and stamps no
   signature that never happened.
+
 - **`provael export --format hf-eval --dataset <benchmark>`: Hugging Face Community Evals
   entries.** One `.eval_results/*.yaml` entry per *measured* arm — treatments, the benign
   baseline and the harmless-variation controls alike — with `value` the episode-level unsafe
@@ -86,6 +208,7 @@ All notable changes to this project are documented here. The format is based on
   the benchmark dataset and adding `provael` to `huggingface.js`'s `evaluation_framework` enum —
   is a pull request a person opens; the emitter only writes the file. Schema read from
   huggingface.co/docs/hub/eval-results on 14 September 2026 (a work-in-progress feature).
+
 - **`scripts/plot_keepout_paths.py` draws every episode's end-effector path against the task's
   keep-out zone** (top-down and side panels, one SVG per task, no plotting dependency): benign
   paths in blue, the chosen attack arm in red with a dot at the first unsafe step, the committed
@@ -93,6 +216,7 @@ All notable changes to this project are documented here. The format is based on
   record has carried since 0.40, so a picture of forty benign paths against the box answers the
   #136 question — does the default box sit inside the benign workspace — faster than any rate.
   Reports written before 0.40 carry no trajectory; the script says so and draws nothing.
+
 - **`docs/compliance/machinery-annex-iii-corruption.md`: Regulation (EU) 2023/1230 Annex III
   §1.1.9 (protection against corruption) and §1.2.1 (safety and reliability of control systems)
   quoted verbatim from EUR-Lex (read 14 September 2026) and mapped clause by clause** — under each
@@ -103,9 +227,11 @@ All notable changes to this project are documented here. The format is based on
   machinery at all times") and what it does not establish; the start/stop, protective-device and
   assembly points are named as out of scope. Linked from the machinery-regulation page and from
   `--format test-report`'s Annex A. Four remaining double-hyphen doc anchors fixed.
+
 - **The π0.5 cross-architecture study is publicly timestamped**: the amended protocol and its
   falsifiers were deposited on Zenodo (10.5281/zenodo.22751558, 14 September 2026) before the
   π0.5 attack arms ran; `docs/studies/pi0-openpi-transfer.md` links the deposit.
+
 - **`provael attack --video-dir DIR` writes one MP4 per episode**: the frames the policy actually
   saw (after the attack and any defense), red-bordered from the first step the suite's predicate
   fired. A runner argument, not a `RunConfig` field, so a run with recording on and off produce
@@ -120,28 +246,182 @@ All notable changes to this project are documented here. The format is based on
   frame the right way up — the policy's processor does the same flip before inference, so the
   clip shows what the policy saw; the attack surface and every committed visual result stay on
   the raw frame.
+
 - **Release assets carry signed SLSA build provenance.** `release.yml` runs
   `actions/attest-build-provenance` over the wheel, the sdist, the CycloneDX SBOM and `SHA256SUMS`
   before `gh release create`, so `gh attestation verify <asset> --repo provael/provael` names the
   workflow, tag and commit that built it. PyPI already had PEP 740 attestations for the wheel and
   sdist; the GitHub release assets carried nothing, which is what OpenSSF Scorecard's
   Signed-Releases check scored 0 on.
+
 - **The execution manifest's `hardware` names the CPU count and the CUDA device**, not just the
   ISA — `x86_64` described every run ever recorded and distinguished nothing.
+
 - **`examples/gpu-ci/local_libero_sweep.py`** — the sharded LIBERO screen on one machine (N
   resumable shards, per-shard logs and timeouts, `--commit` provenance) with an `aggregate` that
   reproduces the published cross-shard statistics from the committed shards.
+
 - **`docs/studies/pi0-openpi-transfer.md`** carries its design (n = 50 per arm, 5 seeds, horizon
   280) and Amendment 1: the first leg runs π0.5 through the native `pi05` adapter, with what that
   narrows and what it leaves open.
 
+- **A report now names the policy that executed, not only the checkpoint that was requested
+  (report schema 6; closes #227).** `RunReport.deployed_policy` is resolved by the adapter at load
+  — concrete class, the checkpoint loaded and its Hub revision read from the local cache, the
+  action unnormaliser actually applied (mode plus a digest over its statistics), the controller
+  convention (action dim, chunk, executed steps, clamp, post-processing pipeline) — under one
+  digest, beside `model`, which stays exactly what it was. Two deployments can agree on `model`
+  and be executable-inequivalent (Tai 2026, arXiv:2606.03724); now the report shows it, `combine`
+  refuses to pool shards whose deployed digests differ, the execution manifest's
+  `checkpoint_repo` / `checkpoint_revision` are filled from it, and the 17025-shaped test report
+  lists it as the item under test. Registered in `attest._REPORT_FIELDS_ADDED_IN[6]`, so every
+  attestation issued before schema 6 still verifies; `schemas/report.v6.schema.json` published.
+
+- **The reference server bounds what it accepts, where it binds and what it says (closes #229).**
+  The three serving-layer concerns found on another project's policy server, applied to provael's
+  own `provael serve` first: request bodies are capped at `MAX_BODY_BYTES` (16 MiB) and refused with
+  413 — before they are read when `Content-Length` says so, at the first byte over the limit when
+  streamed — never buffered; the bind host is loopback only unless the new `--allow-remote` flag is
+  given, checked before anything is imported or started; and no response body carries a traceback,
+  a path or a module name — validation errors return only location, message and type (FastAPI's
+  default echoes the input), and an unhandled failure returns `{"error": {"code": "internal_error",
+  "request_id": …}}` with the traceback logged under that id. The limiter is plain ASGI and
+  unit-tested on the CPU core; the wired app is tested where the `hosted` extra is installed.
+
+- **The campaign's shards combine into one artifact that names exactly which runs it rests on.**
+  After each scheduled run, `scripts/combine_campaign.py` combines every shard under
+  `results/gpu-scheduled/campaign-<version>/` into `campaign.json` beside them, through
+  `provael.combine.combine_reports` and `shard_digests` — the combiner `provael evidence-manifest`
+  already uses — never a second one. The rule, written in `provael.campaign`'s docstring and pinned
+  by `tests/test_campaign.py`: the artifact is written continuously and says `complete: false`,
+  `designation: campaign-in-progress` and `preliminary: true` until every planned shard is present;
+  it is never `report.json` (a combined view has no single execution behind it) and never a ledger
+  row (the campaign directory carries no execution manifest, so `provael.watch` counts the shards
+  and only the shards, exactly as the 0.32.0 campaign is recorded); and it is refused outright when
+  any shard lacks the four required provenance fields. `STALE_AFTER_RELEASES` and
+  `published_measurement` are untouched: a complete campaign at a newer version displaces the old
+  one on its own. `make check-campaign` joins `make check-docs`, with no wall-clock field anywhere.
+
+- **`watch/campaign.json` publishes the re-measurement's progress with a denominator.** A page
+  could say the published measurement was nine releases old and that something was measured today,
+  and could not say the one thing that changes how both read: that a like-for-like campaign is
+  being measured on a current release, how much is banked, and when it completes.
+  `scripts/gen_campaign_progress.py` derives it from the plan, the lane's own `PROVAEL_PIN` (by
+  AST, so the two cannot disagree), the committed shards, the attempts the published body sets as
+  the bar (`provael.watch.displacement`) and the workflow's own cron: `plan`, `toolVersion`,
+  `target.attemptsToDisplace`, `banked.attempts` and shards done and remaining, `cadence`, and
+  `projected.completion`, dated from the newest shard's `ended_at` plus the runs still needed — a
+  fact about the run, not about when the file was written, and null until the first shard lands.
+  Documented in `watch/README.md`; the website is unchanged in this release and can render it in
+  place of a flat STALE banner when it chooses.
+
+### Changed
+
+- **The 44/50 result is no longer described as the attack redirecting the policy (E-2026-12).**
+  The control run of 14 September 2026 shows the roleplay frame with no target named exiting the
+  envelope in 27/30 cells and the roleplay prompt's own tokens in destroyed order in 18/30, against
+  0/30 for two meaning-preserving rewordings. The number stands and was reproduced; the reading
+  changes: SmolVLA leaves its safety envelope under a long, imperative, out-of-distribution string,
+  which is a fragility finding about the policy and not a demonstration that the attacker's chosen
+  object is acted on. The README's finding paragraph and results section, the cross-architecture
+  findings page and the status of the semantic-vs-mechanical page say so now, and the erratum
+  records the sentence that was wrong and the falsification clause that was written too narrowly
+  to catch it.
+
+- **A family counts as exercised against a real policy only with an applicable episode.**
+  `provael.coverage` counted a family the moment any real-policy report contained it, whatever the
+  episode said. The 14 September breadth probe ran every runnable family against SmolVLA, and eight
+  came back with every episode marked not applicable — the policy has no channel those attacks
+  reach — which would have moved the published figure from 3 families to 16 on runs that measured
+  nothing. The counter now requires at least one applicable episode: **8 of 17 adversarial families
+  exercised against a real policy** (`instruction`, `visual`, `injection`, `gradient_patch`,
+  `optimized_instruction`, `optimized_patch`, `universal_patch`, `weight_integrity`; one
+  transferred, seven are measured nulls, five of those at n = 3), **9 stub-validated only**, six of
+  which were run and found not applicable — an absence of a surface, which is neither a measurement
+  nor untested. `watch/registry.json`, the README breakdown and the counted-claims guard move with
+  it, and the sentences that restated "three families" and "fourteen families" as facts about the
+  registry are rewritten or, where they describe a study's own run or a board, named as such.
+
+- **The published measurement is displaced only by a re-measurement of the same thing, and the
+  artifact now says how close one is.** `provael.watch.published_measurement` summed attempts per
+  exact tool version and took the largest bucket. That was right about probes and wrong in two
+  ways that only show up once a lane runs on a schedule: a bucket keyed by exact version resets on
+  every release, so a canary that re-pinned each release accumulated toward nothing; and a bucket
+  counts a single-task run and a ten-task run in the same unit, so a long enough run on one task
+  would have replaced the ten-task headline. The rule is now `provael.watch.displacement`: bodies
+  are every real recorded run at one lineage and version (`Campaign`; a lineage is the policy,
+  the suite and, where the task ids carry one, the task suite — `smolvla` x `libero` x
+  `libero_object`), and a body supersedes the published one only by covering every task it
+  covered with at least as many attempts, a tie going to the newer version. Stricter, never
+  looser. The task suite is part of the key because the LIBERO adapter itself refuses to run two
+  of them as one job ("one run is one suite"): a Spatial or Goal null measured the same night is a
+  different measurement, not part of the Object campaign, and does not raise the bar for
+  re-measuring it. Bodies stay one version each on purpose:
+  `combine.py` refuses to pool shards across tool versions, so a body pooled across releases would
+  be a number no evidence manifest can be built over and no site can re-pin. `MeasurementRecord`
+  and `watch/measurements.json` rows carry the run's `tasks`; `watch/publish-freshness.json`
+  gains `published` (the body behind `measuredWith`, with its `taskSuite`) and `challenger` (the
+  newer body nearest to superseding it, with `attemptsNeeded` and `tasksMissing`); `provael
+  doctor` prints the same as a `re-measurement` row. On the committed tree the published body is
+  the 0.41.2 Object body of 14 September 2026 (656 attempts over ten tasks) and nothing newer
+  challenges it yet; the lane's first shards at the next pin will appear there. Existing fields and
+  their meanings are unchanged, so the site's reader needs nothing.
+
+- **The scheduled GPU lane measures a declared campaign, shard by shard, instead of a probe.** Each
+  `gpu-scheduled.yml` run measured one task, eight arms, two seeds: sixteen episodes that fed the
+  age badge and could not move the published measurement. The arithmetic, plainly: the published
+  body is 550 attempts over ten tasks at 0.32.0; the lane added fourteen attempts on one task per
+  run, in a version bucket that reset every time a release re-pinned it. It measured on the current
+  release twice a week and could not have displaced the published campaign this decade, while its
+  own header priced that at a seventh of the credit. `studies/scheduled_campaign/plan.json` now
+  declares the grid: the same checkpoint, suite, ten tasks and horizon as the published body (read
+  out of its committed shards, and held to them by `tests/test_campaign.py`), every arm it ran plus
+  the `control` family, and enough seeds that the completed campaign exceeds the published attempts
+  rather than tying them — declared against the 0.32.0 body with six seeds, re-modelled the same
+  day on the 0.41.2 Object body with eight (880 planned against 656), before any shard ran. Eighty
+  (task, seed) shards, one Modal L4 container each, twelve episodes, inside a 45-minute
+  timeout; `provael.campaign.next_shards` selects the next five from what is committed under
+  `results/gpu-scheduled/campaign-<pin>/`, so a missed run costs a week and not correctness and a
+  re-run of a slot that already landed selects the shards after it. The cadence stays Tuesday and
+  Friday, which the age badge derives; at five shards a run the ceiling is $3.00 a run and $26.05 a
+  month of the $30 credit (`tests/test_gpu_scheduled_plan.py` holds it), about $1.98 a run
+  expected, sixteen runs, eight weeks. Shards that raise no longer take the run with them: the ones
+  that landed are recorded and committed, then the job fails naming the rest. The pin is held for
+  the campaign (`tests/test_gpu_image_pin.py` allows it to lag while a challenger accumulates there
+  and requires every lane to pin the same version); do not bump it in a release PR while
+  `publish-freshness.json` shows a challenger at it. Stated in the workflow header rather than
+  implied: at the August-to-September cadence of nine minors in thirty-two days, the campaign
+  completes a dozen or more minors behind. The lane makes the number move; it cannot make it
+  current.
+
 ### Fixed
+
+- **The scheduled lane's provenance fix never took effect, and the lane recorded the gap anyway.**
+  Every execution manifest the scheduled GPU lane committed reports `repository`, `commit`,
+  `dep_lock_digest` and `precision` under `missing_fields`. The 2026-09-15 run did so the day after
+  `gpu-scheduled.yml` gained `fetch-depth: 0` and a comment saying the commit gap was fixed: the
+  driver resolved the tag and passed `PROVAEL_COMMIT` correctly, and the container installed the
+  released 0.41.2 wheel, which reads no such variable — the fix lived in `main`, the lane runs
+  releases. `repository` and `dep_lock_digest` had never been supplied by any caller in any version;
+  `precision` was declared on the adapter base class and set by one adapter nobody has run.
+  `provael attack` now fills all four: `repository` from `PROVAEL_REPOSITORY` or the checkout's
+  origin, `commit` as before, `dep_lock_digest` as `uv.lock:sha256:<hex>` from a checkout's lock file
+  or `installed:sha256:<hex>` over the running interpreter's distribution set (a container that
+  pip-installed a release has no lock file; its installed set is the fact), and `precision` read off
+  the loaded policy's parameters (`fp32`/`bf16`/`fp16`) for LeRobot and `fp32` for the stub, which
+  computes in float32. The image now states `PROVAEL_REPOSITORY`. And the workflow's "Record the
+  measurement" step runs `scripts/check_provenance.py` before `provael watch --record` and refuses
+  any shard that lacks one of the four, naming the shard and the field — so until `PROVAEL_PIN` names
+  a release that carries these fields, the lane runs and records nothing, loudly, which is the
+  honest state. `tests/test_provenance_fields.py` holds each source and the end-to-end fact that a
+  stub run from this checkout carries none of the four gaps.
 
 - **`benchmark_eval_yaml` declared `libero--none` twice.** The registry already carries the
   `none` baseline, and the README's recipe prepends it for emphasis, so the committed benchmark
   `eval.yaml` and `tasks.jsonl` listed the benign task twice. Arms are now de-duplicated in order
   of first appearance, the example files are regenerated (44 tasks, 440 rows), and a test reads
   every committed `examples/hf-benchmark/*/eval.yaml` so a duplicate cannot be committed again.
+
 - **`gradient_patch` could not move a frame (E-2026-11).** Its objective's gradient is exactly
   zero at the clean frame and the search started from a zero perturbation, so against a smooth
   encoder the released module (0.39.1–0.41.2) never left the clean frame — found the first time it
@@ -150,12 +430,14 @@ All notable changes to this project are documented here. The format is based on
   No published rate moves: the arm never ran against a VLA. The Diffusion Policy × PushT figures it
   shipped with came from a script outside this repository and are now labelled as that script's
   result, not this module's, in `PRIOR_ART.md` and the errata ledger.
+
 - **Three stale sentences in the compliance docs** (found by the 13 Sep regulatory re-read):
   `docs/compliance/index.md` called ISO 25785-1 a "Working Draft… expected 2026–2027" (it is a
   Committee Draft since 8 May 2026 with no committed date; trackers read ~2028) and opened the
   routing box with the pre-adoption "political agreement May 2026" clause (it is Regulation (EU)
   2026/1744, OJ 24 July 2026, in force 27 July); `machinery-reg-2027.md` said ISO 10218:2025 was
   "in force" (a standard is published, not in force).
+
 - **A LIBERO run is built for the task suite its tasks name.** `LiberoSuiteAdapter.reset()`
   parsed the suite out of a `"libero_spatial/3"` task name and then discarded it: the environment
   came from the adapter's constructor default (`libero_object`) and the episode was recorded as
@@ -197,8 +479,6 @@ All notable changes to this project are documented here. The format is based on
   `results/smolvla_libero_object/attestation.insurer.json` is regenerated from the unchanged source
   report: the assurance payload embeds the catalogue, so its `payloadSha256` moves. The subject
   digest over `report.json` does not, and no attestation over a run report is invalidated.
-
-### Fixed
 
 - **The freshness badge's colour comes from the day count it prints.** It came from the
   fractional age, so at 2.3 days the badge read "2 days ago" in orange — a number inside the fresh
@@ -252,33 +532,37 @@ All notable changes to this project are documented here. The format is based on
   `0.41.2` since the 0.41.2 release; the date is what the report did not catch, and what the guard
   it asked for now covers.
 
-### Fixed
-
 - **`provael submit` advised a command that does not exist.** The generated PR body told
   reviewers to "verify the bundle offline with `provael verify …`"; the command is
   `provael attest --verify`. `docs/errata.md`'s E-2026-01 carried the same phantom command
   (`provael verify … --print-payload`) in its "how to tell whether a bundle is affected" block,
   now replaced with the `jq | base64 -d` pipeline that actually reads the payload.
+
 - **Meta-World was listed as runnable with nothing saying it cannot complete a CLI run.**
   `MetaworldSuiteAdapter` refuses LIBERO's default keep-out box (it lies behind the Sawyer arm),
   the CLI has no zone option and no Meta-World calibration is committed, so `--suite metaworld`
   raised at reset. `list-suites` and `doctor` now print the gating note beside the suite
   (`suites.SUITE_GATING_NOTES`). Counts are unchanged: the suite is implemented and runnable from
   the Python API with a zone derived from its own benign envelope.
+
 - **Execution manifests from the Modal GPU lanes recorded `commit: null`.** The container
   pip-installs the pinned release and has no git checkout. The drivers now resolve the pinned
   tag's commit on the runner and pass it as `PROVAEL_COMMIT`, which `_emit_execution_manifest`
   honours when it is hex-shaped (`cli/_shared.py`); the two GPU workflows check out full history
   so the tag resolves.
+
 - **`SECURITY.md` contradicted itself on when the CRA's open-source-steward duties start** (11
   September 2026 in one paragraph, 11 December 2027 in another). 11 December 2027, per Article
   71(2), throughout.
+
 - **`action.yml`'s Marketplace description was 172 characters against a 125-character cap.**
   Shortened; `tests/test_action_scripts.py` now pins the cap.
+
 - **Errata ledger:** the numbering note claimed the ledger and the provael.com mirror agreed
   entry-for-entry; the mirror had minted its own E-2026-05 on 3 September for a different
   correction. That correction is now recorded here as E-2026-09, the collision is stated, and
   E-2026-10 records the reword-arm mix-up in the site's methodology note. Next free ID: E-2026-11.
+
 - Stale docstrings that narrated a 29-attack / 15-family registry (`coverage.py`,
   `tests/test_coverage.py`), "controls not wired into the registry yet" (`tests/test_controls.py`),
   "90 test modules" (`ci.yml`) and "33 released versions" (`tests/test_changelog_gate.py`) now

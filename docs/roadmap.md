@@ -18,17 +18,43 @@ Provael is CPU-first and model-agnostic. Shipped vs. planned, honestly marked.
 
   This is **not** the cross-repo constant fix; that was `staleAfterReleases` in `watch/release.json`
   in 0.41.1, which www.provael.com now reads instead of holding its own copy.
+
+  Since 18 September 2026 the artifact also carries the body behind the published number and the
+  newer body nearest to displacing it (`published`, `challenger`, with `attemptsNeeded` and
+  `tasksMissing`), because the lane meant to refresh it could not add up: a canary re-pinned on
+  every release, so its version bucket reset before it accumulated, and it ran one task of ten. The
+  scheduled lane now measures a declared campaign (`studies/scheduled_campaign/plan.json`) shard by
+  shard at one held pin, records a shard only with complete provenance, combines the shards into a
+  `campaign.json` that says how complete it is, and publishes its progress as `watch/campaign.json`;
+  the rule requires a re-measurement to cover what it replaces before its size counts. What the lane
+  cannot do is stated in its own header: at the August-to-September release cadence the campaign
+  that displaces the published measurement completes about a dozen minors behind. It moves the
+  number; it does not make it current.
 - **White-box gradient attacks** (`gradient_patch`), shipped in **0.39.0, 1 September 2026**.
   Untargeted L-inf projected gradient ascent through the policy's own vision encoder, GPU-gated
   and sim-only. This was listed under Planned for two days after it shipped, and neither
   `SAFETY.md` nor this file knew — SAFETY.md still said the registry used no gradients or model
   internals, which by then was false. Corrected in 0.39.3, along with the roadmap-honesty test
   that could not have caught it because an attack family registers no CLI command.
+
+  **Measured status, and the next transfer arm.** Since the 0.42.0 release, `weight_integrity` and
+  `gradient_patch` can run against the real SmolVLA x LIBERO adapter (`LeRobotAdapter` exposes the
+  `action_out_proj` weights through an INT8 view and backpropagates through its own vision tower),
+  and the arm is registered
+  and priced as the `whitebox-pilot` stage of
+  [`examples/gpu-ci/modal_libero_suite.py`](https://github.com/provael/provael/blob/main/examples/gpu-ci/modal_libero_suite.py)
+  (2 tasks x 12 arms x 2 seeds, hard ceiling ~$4, dispatched by hand through `gpu-arm.yml`, never
+  scheduled). It has not run. The workstation breadth probe of 14 September already exercised
+  `weight_integrity` and `gradient_patch` against SmolVLA on one task at three seeds (0/3 each,
+  with applicable episodes, which is why `realPolicyTested` in `watch/registry.json` already
+  counts them: **8 of 17**); this arm is the powered version of that probe, and no rate is stated
+  here before its result is committed under `results/`.
 - **Policies:** `stub` (CPU); `smolvla`, `pi0`, `pi05`, `pi0fast`, `groot` (LeRobot); `openvla`
   (HF transformers); `openpi` (websocket client to a π0 policy *server*). Bring-your-own via the
   `PolicyAdapter` ABC. **`groot`, `openvla` and `openpi` are registered scaffolding** — no
   checkpoint has been loaded through any of them here, and `provael list-policies` says so per
-  backend. Only `smolvla` has produced a committed real-model result.
+  backend. `smolvla` (the ten-task suite) and `pi05` (a three-seed preliminary leg on the same
+  tasks, 18 September 2026) have committed real-model results.
 - **Suites:** `stub` (scalar, CPU), `reach` (spatial, CPU), `humanoid` (whole-body, CPU),
   `libero` + `metaworld` (real simulators, gated); `vla_arena` (VLA-Arena's declared per-step
   cost predicate as `is_unsafe()`, LIBERO-shaped policy path — **registered scaffolding** until its

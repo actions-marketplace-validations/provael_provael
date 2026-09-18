@@ -27,6 +27,11 @@ eighteen-name family list under a "19 families" label in README.md. The table be
                                                     hard ceiling ~$12 (10 x 1.5 h timeout)
     full             10  x  8  x  5  x 1   =    400    15.4       $12.29   2.04 h sharded (RUN)
                                                     hard ceiling ~$20 (10 x 2.5 h timeout)
+    whitebox-pilot    2  x 12  x  2  x 1   =     48     ~2.4     ~$2 +?    <=2.5 h sharded
+                                                    hard ceiling ~$4.00 (2 x 2.50 h x $0.7992,
+                                                    scripts/gpu_arm_plan.py whitebox-pilot)
+                                                    "+?" = the gradient_patch arm's cost has no
+                                                    L4 measurement yet; see the stage comment
 
     (RUN) marks a stage that has actually been run. Everything unmarked is a projection, and
     `full`'s row is the reason to read projections sceptically — see below.
@@ -132,7 +137,10 @@ ALL_TASKS = ",".join(f"libero_object/{i}" for i in range(10))
 ATTACKS = "none,instruction,visual,injection"
 
 #: The exact provael release every container installs. `tests/test_gpu_image_pin.py` asserts this
-#: equals `provael.__version__`, so a release bump that forgets this line fails CI.
+#: is a version the checkout can account for — the current one, or the campaign pin the scheduled
+#: lane is accumulating at (see `modal_provael_gpu.py`), and in every case the SAME pin as every
+#: other lane — so a release bump that forgets this line fails CI, and so does a bump that would
+#: split the lanes onto two builds again.
 #:
 #: PINNING IS NOT THE HARD PART — NOTICING A STALE PIN IS. This line already pinned, to a commit,
 #: with a comment saying to "bump this deliberately when a stage needs newer code". It stayed at
@@ -157,7 +165,7 @@ ATTACKS = "none,instruction,visual,injection"
 #: pushed registry, because the image was rebuilt from a layer that had resolved `@main` weeks
 #: earlier. That failure was loud. The same staleness on a code path that still RUNS is silent,
 #: and is exactly what happened to `calibrate`.
-PROVAEL_PIN = "0.41.2"
+PROVAEL_PIN = "0.42.0"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
 
 
@@ -380,6 +388,43 @@ STAGES: dict[str, dict[str, str]] = {
         "seeds": "5", "episodes_per_seed": "1", "timeout": "5400",
         "query_budget": "64",
     },
+    # THE TWO WHITE-BOX FAMILIES, ON THE REAL ADAPTER, AS A PILOT. Since 0.42.0 `LeRobotAdapter`
+    # implements WeightAccessible over `model.action_out_proj` (a symmetric per-tensor INT8 view,
+    # delta applied to the floats, exact restore) and provides `input_gradient` through the
+    # backend's own vision tower, so `weight_integrity` and `gradient_patch` can run against
+    # SmolVLA x LIBERO instead of against the stub. The only real-policy evidence so far is the
+    # 14 Sep 2026 breadth probe (one task, three seeds, 0/3 each, under results/); this stage is
+    # the powered version. It registers and prices the arm; it does not claim a rate.
+    #
+    # NEEDS provael >= 0.42.0 IN THE IMAGE. On 0.41.2 (the PROVAEL_PIN before that release) the
+    # adapter has neither surface, every episode of both families reports itself not applicable,
+    # and the run measures nothing while billing the full horizon. Check PROVAEL_PIN before
+    # dispatching.
+    #
+    # ARMS: 12, not 3. `weight_integrity` expands to the ten-rung ladder (gradient- and random-
+    # selected flips at K = 1, 4, 16, 64, 256) and `gradient_patch` to itself, plus `none`. The
+    # ladder is the family's whole point, so the pilot keeps every rung and economises on seeds.
+    #
+    # SIZING, derived, and the gradient arm dominates. 2 tasks x 12 arms x 2 seeds = 48 episodes,
+    # 24 per shard. Twenty-two of a shard's episodes cost what any episode costs: 280 steps at the
+    # measured ~0.65 s/step is ~182 s at the full horizon, ~4,000 s in total, and the weight arms
+    # add one sensitivity backprop per run, seconds. The two `gradient_patch` episodes are the
+    # unknown: each frame takes DEFAULT_STEPS = 3 PGD refinements, each a forward AND a backward
+    # through the vision tower, and the only measured constant is on an Apple M4 (~3.5 s per
+    # refinement, backward 27x forward). If an L4 does a refinement in ~0.6 s the arm is ~2.5 s per
+    # step and ~700 s per episode; if it is closer to the M4 ratio it is several times that. So the
+    # timeout is set for the pessimistic case rather than the hoped one: 9,000 s (2.5 h) per shard,
+    # 2 shards, hard ceiling 2 x 2.5 h x $0.7992 = ~$4.00. Expected spend at `full`'s measured
+    # $0.031/episode is ~$1.50 plus whatever the gradient arm really costs; the first thing to read
+    # off the log is that arm's seconds per step, which sizes any campaign that follows.
+    #
+    # `--resume` is passed (as every stage now does) so a re-dispatched shard replays the ledger the
+    # Volume holds rather than re-measuring 22 cheap episodes to get back to the two expensive ones.
+    "whitebox-pilot": {
+        "tasks": "libero_object/0,libero_object/1",
+        "attacks": "none,weight_integrity,gradient_patch",
+        "seeds": "2", "episodes_per_seed": "1", "timeout": "9000",
+    },
 }
 
 #: Defaults to the ONE-episode timing stage. The previous default was the 210-episode probe, and a
@@ -569,6 +614,12 @@ def redteam(stage: str, task: str | None = None) -> str:
         "--horizon", "280",
         "--seed", "0",
         "--out", out,
+        # The module docstring has said since 0.37 that sharding "composes with --resume"; until
+        # this line, nothing passed it, so a re-dispatched shard started from episode one. The
+        # ledger lives beside the report on the Volume, so it persists exactly as far as the
+        # Volume's last commit: a re-run after a failure that reached commit replays it, a hard
+        # kill before any commit does not. That is what the sentence in the docstring now means.
+        "--resume", f"{out}/ledger.jsonl",
     ]
     # Only the stages that declare a budget pass one, so the flag cannot silently appear on a
     # stage whose protocol never had it — which would make that stage's results incomparable with

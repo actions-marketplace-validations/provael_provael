@@ -176,7 +176,7 @@ runs:
       # up a PATCH — exactly how 0.25.1's dependency fix reaches users who pinned @v0.25.0 — while
       # still refusing the next minor. The floor tracks the newest patch so a fix is not optional.
       env:
-        PROVAEL_VERSION: ">=0.41.0,<0.42.0"
+        PROVAEL_VERSION: ">=0.42.0,<0.43.0"
         INSTALL_SPEC: ${{ inputs.install-spec }}
       run: |
         set -euo pipefail
@@ -307,7 +307,7 @@ runs:
         python "$GITHUB_ACTION_PATH/scripts/action/mitigation_gate.py"
 
     - name: Upload SARIF to code scanning
-      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       with:
         sarif_file: ${{ inputs.sarif-output }}
         category: provael
@@ -342,7 +342,7 @@ runs:
 
     - name: Upload regression SARIF to code scanning
       if: inputs.baseline != '' && hashFiles('provael-regression.sarif') != ''
-      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       with:
         sarif_file: "provael-regression.sarif"
         category: provael-regression

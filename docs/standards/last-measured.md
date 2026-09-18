@@ -150,6 +150,50 @@ Green would need `FRESH_DAYS = 2`, a run every other day at ~$7.40/month, which 
 quarter of the budget for a canary. **The seven-day window is, for the first time, held by something
 that can actually run.**
 
+**Update, 18 September 2026: the lane that held the seven-day window could not move the other
+one.** `watch/publish-freshness.json` measures a second thing: whether the *published* number was
+measured against code that still exists. It is the largest body of real recorded runs at one lineage
+(policy, suite and task suite) and one version (`provael.watch.displacement`), and on the morning of
+this date that body is 550 attempts over ten `libero_object` tasks at v0.32.0, nine minor releases
+back. The scheduled lane added fourteen
+attempts on one task per run, and its version bucket reset every time a release re-pinned it. Twice
+a week for ever would have reached nothing. The arithmetic was the problem, not the cadence.
+
+Three things changed. The rule now requires a re-measurement to *cover* what it replaces (every
+task, at least as many attempts) before its size counts, which closes the opposite hole too: a long
+enough single-task run could previously have displaced the ten-task headline. Each scheduled run is
+now the next shards of a declared campaign (`studies/scheduled_campaign/plan.json`: the same
+checkpoint, ten tasks, every arm the published body ran plus the controls, eight seeds) at one pinned
+release held until the campaign supersedes the published body; which shards are done is read from
+`results/gpu-scheduled/campaign-<version>/`, the shards are combined beside themselves into a
+`campaign.json` that says `complete: false` until the plan is covered, and `watch/campaign.json`
+publishes the progress with a denominator. And a shard is recorded only if its manifest carries the
+repository, the commit, the dependency-lock digest and the precision — every scheduled-lane manifest
+ever committed admitted all four were missing, and the lane recorded them anyway. That gate refuses
+shards from any release that predates the fields, so the lane records nothing until its pin moves to
+one that carries them, and says so.
+
+What this does not do, stated here because the lane looks like a fix for it: at the release cadence
+of August to September 2026 (nine minors in thirty-two days) a campaign of sixteen runs lands a
+dozen or more minors behind on the day it completes, past the two-release window it is measured
+against. The lane makes the published measurement move, repeatedly, and publishes how far along it
+is. It cannot make it current. What would: a slower release cadence while a campaign runs, or a
+larger credit. Neither is a code change.
+
+**Update, 18 September 2026, later the same day: the published measurement moved, and not by the
+lane.** The workstation's runs of 14 September landed under `results/*_2026-09-14`. Their Object
+body — the ten-task suite on provael 0.41.2, its control run, the breadth probe, the clip and the
+canary, 656 attempts over the same ten tasks — covers the 0.32.0 campaign and exceeds it, so it is
+the published body now: `measuredWith` reads 0.41.2, `releasesBehind` 0, `isStale` false, on the
+same rule and with no threshold touched. Two consequences were taken in the same sweep. The body is
+keyed by task suite as well as policy and suite (`Campaign.task_suite`), because the Spatial, Goal
+and LIBERO-10 runs of that night are measurements of other benchmarks — the LIBERO adapter refuses to
+run two of them as one job — and pooling them would have made every future Object re-measurement a
+33-task, four-horizon job. And the lane's plan was re-modelled on the new body before any shard ran:
+eight seeds, 880 planned attempts against 656, the margin left for the 0.41.2 runs still to land
+from that machine. The window is closed today by a machine in an office, not by the lane; the lane
+is what keeps it closed when 0.42.0 and the releases after it ship.
+
 ### What changed instead
 
 The **claim** moved, not the threshold. `STALE_DAYS` is still 7, because seven days genuinely is old

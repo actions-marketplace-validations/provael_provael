@@ -43,7 +43,19 @@ import numpy as np
 import numpy.typing as npt
 
 from provael.policies.base import PolicyAdapter
-from provael.types import IMAGE_KEY, Action, Observation, SuiteFeatures
+from provael.policies.identity import (
+    resolve_hub_revision,
+    step_names,
+    unnormaliser_from_pipeline,
+)
+from provael.types import (
+    IMAGE_KEY,
+    Action,
+    ControllerConvention,
+    DeployedPolicy,
+    Observation,
+    SuiteFeatures,
+)
 
 _INSTALL_HINT = (
     "The '{name}' policy requires the optional LeRobot dependency, which is not "
@@ -133,6 +145,11 @@ class IncompatiblePolicyError(RuntimeError):
     """Raised when a checkpoint's features don't match the env (needs fine-tuning/rename)."""
 
 
+def _int_or_none(value: object) -> int | None:
+    """An int for a config field that is one, ``None`` for anything else (absent, None, odd)."""
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def clamp_action(action: object, action_dim: int, low: float = -1.0, high: float = 1.0) -> Action:
     """Flatten a policy action to ``(action_dim,)`` float32 and clamp to ``[low, high]``.
 
@@ -143,6 +160,23 @@ def clamp_action(action: object, action_dim: int, low: float = -1.0, high: float
     trimmed = flat[:action_dim] if flat.size > action_dim else flat
     result: Action = np.clip(trimmed, low, high).astype(np.float32)
     return result
+
+
+_PRECISION_NAMES = {"float32": "fp32", "bfloat16": "bf16", "float16": "fp16", "float64": "fp64"}
+
+
+def _precision_of(policy: Any) -> str | None:
+    """``fp32`` / ``bf16`` / ``fp16`` from the loaded parameters' dtype; None when it cannot tell.
+
+    The first parameter's dtype, which is what every mixed-precision recipe in lerobot keys on. A
+    dtype outside the table (an integer-quantised checkpoint, say) is reported as None rather than
+    coerced into the nearest float name.
+    """
+    try:
+        dtype = str(next(policy.parameters()).dtype)
+    except Exception:  # noqa: BLE001 - a policy with no parameters records no precision
+        return None
+    return _PRECISION_NAMES.get(dtype.removeprefix("torch."))
 
 
 class LeRobotAdapter(PolicyAdapter):
@@ -278,6 +312,11 @@ class LeRobotAdapter(PolicyAdapter):
             ) from exc
         policy.eval()
         self._policy = policy
+        # The precision the checkpoint actually loaded at, read off its parameters rather than
+        # assumed from a flag: report.precision and the execution manifest's `precision` were None
+        # on every committed real-model run, which `missing_fields` reported truthfully and which
+        # the scheduled lane's provenance gate now refuses.
+        self.resolved_precision = _precision_of(policy)
 
         preprocessor_overrides: dict[str, Any] = {"device_processor": {"device": str(device)}}
         if self.rename_map is not None:
@@ -294,6 +333,37 @@ class LeRobotAdapter(PolicyAdapter):
                 env_cfg=env_cfg, policy_cfg=policy_cfg
             )
         self._loaded = True
+        self.resolved_identity = self._resolve_identity(policy, policy_cfg)
+
+    def _resolve_identity(self, policy: Any, policy_cfg: Any) -> DeployedPolicy:
+        """What executed, read off the live objects rather than the request (issue #227).
+
+        Each part is resolved independently and records ``None`` where it cannot be read: the
+        revision comes from the Hub cache path the config was loaded from (no network, ``None`` for
+        a local checkout); the unnormaliser and its statistics from the post-processing pipeline
+        that :meth:`act` really applies; the controller convention from the policy config and the
+        env post-processor between the policy and the simulator. The clamp is the one this adapter
+        applies itself in :meth:`act`, so it is recorded as part of the convention.
+        """
+        pipeline = step_names(self._postprocess) + step_names(self._env_postprocess)
+        cfg = policy_cfg
+        convention = ControllerConvention(
+            action_dim=self._features.action_dim if self._features is not None else None,
+            chunk_size=_int_or_none(getattr(cfg, "chunk_size", None)),
+            n_action_steps=_int_or_none(getattr(cfg, "n_action_steps", None)),
+            action_bounds=(-1.0, 1.0),
+            pipeline=pipeline,
+        )
+        return DeployedPolicy.build(
+            adapter=self.name,
+            policy_class=type(policy).__name__,
+            checkpoint=self.model_id,
+            checkpoint_revision=resolve_hub_revision(self.model_id),
+            action_unnormaliser=unnormaliser_from_pipeline(
+                self._postprocess, source="lerobot-postprocessor"
+            ),
+            controller_convention=convention,
+        )
 
     def reset(self) -> None:
         """Clear the policy's internal action queue between episodes (verified eval call)."""

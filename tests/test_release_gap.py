@@ -17,16 +17,29 @@ from __future__ import annotations
 from provael.watch import (
     STALE_AFTER_RELEASES,
     MeasurementRecord,
+    _semver,
+    campaigns,
+    displacement,
     published_measurement,
     releases_behind,
+    task_suite_of,
 )
 
+TEN_TASKS = tuple(f"libero_object/{i}" for i in range(10))
 
-def _rec(version: str, attempts: int, measured_at: str, policy: str = "smolvla") -> MeasurementRecord:
+
+def _rec(
+    version: str,
+    attempts: int,
+    measured_at: str,
+    policy: str = "smolvla",
+    tasks: tuple[str, ...] | None = None,
+    suite: str = "libero",
+) -> MeasurementRecord:
     return MeasurementRecord(
-        policy=policy, suite="libero", tool_version=version,
+        policy=policy, suite=suite, tool_version=version,
         attempts=attempts, successes=0, asr=0.0,
-        measured_at=measured_at, recorded=True, commit="abc1234",
+        measured_at=measured_at, recorded=True, commit="abc1234", tasks=tasks,
     )
 
 
@@ -107,16 +120,220 @@ def test_the_window_matches_the_one_the_site_publishes() -> None:
     assert STALE_AFTER_RELEASES == 2
 
 
-def test_the_committed_ledger_is_past_the_window_today() -> None:
-    """The live state, asserted so a re-measurement that closes the gap is noticed rather than assumed."""
+def test_the_committed_ledger_is_inside_the_window_today() -> None:
+    """The live state, asserted so a change in it is noticed rather than assumed.
+
+    From 8 September to 18 September 2026 this test asserted the opposite: the published
+    measurement was v0.32.0, nine minors behind, and the assertion existed so that a real
+    re-measurement closing the gap would be noticed as news. On 14 September a workstation re-ran
+    the ten-task suite on 0.41.2 (`results/smolvla_libero_object_suite_2026-09-14`, roleplay 42/50
+    against the published 44/50) with its controls beside it, and the branch that landed them on
+    18 September moved the published measurement to 0.41.2. The gap is zero, the banner clears on
+    its own, and this test now guards the new state: a release that reopens the window past
+    STALE_AFTER_RELEASES without a re-measurement will fail here, which is the correct time to be
+    told.
+    """
     from provael import __version__
 
     got = published_measurement()
     assert got is not None, "no real measurement is committed"
+    assert got.tool_version == "0.41.2", (
+        f"the published measurement is v{got.tool_version}; if a larger real campaign landed at a "
+        "newer version, update this test and the CHANGELOG — the measurement moving is news"
+    )
     gap = releases_behind(got.tool_version, __version__)
     assert gap is not None
-    assert gap > STALE_AFTER_RELEASES, (
-        f"the published measurement (v{got.tool_version}) is now {gap} release(s) behind "
-        f"{__version__}, within the {STALE_AFTER_RELEASES}-release window. If a real re-measurement "
-        "landed, update this test and the CHANGELOG — the gap closing is news."
+    assert gap <= STALE_AFTER_RELEASES, (
+        f"the published measurement (v{got.tool_version}) is {gap} release(s) behind {__version__}, "
+        f"past the {STALE_AFTER_RELEASES}-release window again. Releases have outrun the "
+        "re-measurement; the scheduled campaign (studies/scheduled_campaign) is what closes it."
     )
+
+
+# --------------------------------------------------------------------------- #
+# the body rule: what a re-measurement has to be before its size counts
+# --------------------------------------------------------------------------- #
+#
+# The size-only rule summed attempts per exact version. It was right about probes and wrong about
+# the two things a scheduled lane does: it re-pins on every release, so its bucket reset before it
+# could accumulate; and it ran one task, so even an accumulated bucket would have been a different
+# measurement from the ten-task headline it was meant to refresh. These tests pin the stricter rule.
+
+
+def _campaign(version: str, per_shard: int, day: str, tasks=TEN_TASKS) -> list[MeasurementRecord]:
+    """Ten shards, one per task, at one version — the shape of the committed 0.32.0 body."""
+    return [
+        _rec(version, per_shard, f"{day}T09:4{i}:00Z", tasks=(task,))
+        for i, task in enumerate(tasks)
+    ]
+
+
+def test_a_longer_run_on_fewer_tasks_does_not_displace_a_ten_task_campaign() -> None:
+    """The hole in the size-only rule, closed.
+
+    600 attempts on one task at 0.42.0 against 550 across ten tasks at 0.32.0. The old rule took the
+    bigger bucket; a reader would then have been told the ten-task headline was measured with 0.42.0
+    by a run that never touched nine of its tasks.
+    """
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        _rec("0.42.0", 600, "2026-10-01T09:40:00Z", tasks=("libero_object/0",)),
+    ]
+    got = published_measurement(records)
+    assert got is not None and got.tool_version == "0.32.0"
+
+
+def test_a_re_measurement_of_every_task_at_least_as_large_displaces_it() -> None:
+    """The converse, and the thing the scheduled lane is now built to produce."""
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        *_campaign("0.41.2", 55, "2026-10-20"),  # equal size, newer: the tie goes to it
+    ]
+    got = published_measurement(records)
+    assert got is not None and got.tool_version == "0.41.2"
+
+
+def test_a_body_accumulates_across_runs_at_one_version() -> None:
+    """Slices land two a week; the body they build is one campaign, not twelve probes."""
+    slices = [
+        _rec("0.41.2", 45, f"2026-10-{day:02d}T04:30:00Z", tasks=TEN_TASKS[:5] if day % 2 else TEN_TASKS[5:])
+        for day in range(1, 14)
+    ]
+    (body,) = campaigns(slices)
+    assert body.attempts == 45 * 13
+    assert body.runs == 13
+    assert body.tasks == TEN_TASKS
+    assert body.measured_at == "2026-10-13T04:30:00Z"
+
+
+def test_a_body_never_spans_versions() -> None:
+    """`provael.combine` refuses shards at different tool versions; the body rule must agree.
+
+    Pooling 0.41.2 with 0.42.0 would produce a number no evidence manifest can be built over and
+    no site can re-pin. The two stay separate bodies, and neither reaches the published one alone.
+    """
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        *_campaign("0.41.2", 30, "2026-10-01"),
+        *_campaign("0.42.0", 30, "2026-10-10"),
+    ]
+    versions = {b.tool_version: b.attempts for b in campaigns(records)}
+    assert versions == {"0.32.0": 550, "0.41.2": 300, "0.42.0": 300}
+    got = published_measurement(records)
+    assert got is not None and got.tool_version == "0.32.0"
+
+
+def test_the_challenger_is_the_newer_body_nearest_to_superseding() -> None:
+    """A covering body beats a bigger narrow one: only the covering one can ever displace."""
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        _rec("0.42.0", 600, "2026-10-01T09:40:00Z", tasks=("libero_object/0",)),
+        *_campaign("0.43.0", 10, "2026-10-10"),
+    ]
+    standing = displacement(records)
+    assert standing is not None and standing.challenger is not None
+    assert standing.challenger.tool_version == "0.43.0"
+    assert standing.attempts_needed == 450
+    assert standing.tasks_missing == ()
+
+
+def test_the_challenger_reports_what_it_still_lacks() -> None:
+    """Both deficits, because the lane has to close both and a reader should see which is open."""
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        _rec("0.41.2", 14, "2026-09-11T09:35:46Z", tasks=("libero_object/0",)),
+        _rec("0.41.2", 14, "2026-09-15T10:06:35Z", tasks=("libero_object/0",)),
+    ]
+    standing = displacement(records)
+    assert standing is not None and standing.challenger is not None
+    assert standing.challenger.attempts == 28
+    assert standing.attempts_needed == 550 - 28
+    assert standing.tasks_missing == TEN_TASKS[1:]
+
+
+def test_no_newer_body_means_no_challenger_rather_than_a_zero_deficit() -> None:
+    """A deficit of zero reads as "done"; the absence of a challenger must not be rendered as one."""
+    standing = displacement(_campaign("0.32.0", 55, "2026-08-09"))
+    assert standing is not None
+    assert standing.challenger is None
+    assert standing.attempts_needed is None
+    assert standing.tasks_missing is None
+
+
+def test_a_different_policy_is_a_different_lineage() -> None:
+    """A body at another policy cannot supersede this one, however large — it measures something else."""
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        *_campaign("0.42.0", 70, "2026-10-01"),
+    ]
+    records[-1] = _rec("0.42.0", 70, "2026-10-01T09:49:00Z", policy="pi05", tasks=TEN_TASKS)
+    standing = displacement(records)
+    assert standing is not None
+    # The 0.42.0 smolvla body is short one shard (nine tasks); the pi05 record is another lineage.
+    assert standing.published.tool_version == "0.32.0"
+    assert standing.challenger is not None and standing.challenger.policy == "smolvla"
+
+
+SPATIAL_TASKS = tuple(f"libero_spatial/{i}" for i in range(10))
+
+
+def test_a_different_libero_task_suite_is_a_different_lineage() -> None:
+    """LIBERO Spatial, Goal and 10 runs at 0.41.2 neither join nor raise the Object body.
+
+    The 14 September 2026 ledger: the ten-task Object suite plus its control at 0.41.2, and ten
+    Spatial nulls the same night. Pooled by (policy, suite, version) alone those would have made
+    one 33-task body that every future Object re-measurement had to re-run in full. The adapter
+    refuses to run two task suites as one job ("one run is one suite"), so the body is keyed the
+    same way: Spatial is its own lineage, the Object body supersedes the 0.32.0 Object body on its
+    own, and the Spatial body's attempts appear in neither.
+    """
+    records = [
+        *_campaign("0.32.0", 55, "2026-08-09"),
+        *_campaign("0.41.2", 56, "2026-09-14"),
+        *_campaign("0.41.2", 6, "2026-09-14", tasks=SPATIAL_TASKS),
+    ]
+    bodies = campaigns(records)
+    assert {(b.task_suite, b.tool_version, b.attempts) for b in bodies} == {
+        ("libero_object", "0.32.0", 550),
+        ("libero_object", "0.41.2", 560),
+        ("libero_spatial", "0.41.2", 60),
+    }
+    standing = displacement(records)
+    assert standing is not None
+    assert standing.published.task_suite == "libero_object"
+    assert standing.published.tool_version == "0.41.2"
+    assert standing.published.attempts == 560
+    assert standing.published.tasks == TEN_TASKS
+    assert standing.challenger is None
+
+
+def test_a_task_suite_is_read_off_the_task_ids() -> None:
+    assert task_suite_of(("libero_object/0", "libero_object/7")) == "libero_object"
+    assert task_suite_of(("libero_10/2",)) == "libero_10"
+    assert task_suite_of(None) is None
+    assert task_suite_of(()) is None
+    # Bare ids carry no task suite; a list that mixes two is not one run's, and gets none either.
+    assert task_suite_of(("3", "4")) is None
+    assert task_suite_of(("libero_object/0", "libero_spatial/0")) is None
+    assert task_suite_of(("libero_object/0", "3")) is None
+
+
+def test_the_committed_ledger_publishes_the_0_41_2_object_body() -> None:
+    """The live state: the 14 September 2026 re-measurement superseded the 0.32.0 campaign.
+
+    Asserted structurally rather than by number, because the body grows as runs land and the
+    scheduled lane's shards will appear beside it. What must NOT change without a deliberate edit
+    here: that the published body is the ten-task Object lineage at 0.41.2, and that anything
+    challenging it is the same lineage at a newer version. The day a challenger supersedes it, the
+    site re-pins and this test is rewritten — that is the news.
+    """
+    standing = displacement()
+    assert standing is not None
+    assert standing.published.lineage == ("smolvla", "libero", "libero_object")
+    assert standing.published.tool_version == "0.41.2"
+    assert standing.published.tasks == TEN_TASKS
+    assert standing.published.attempts >= 656, "the 14 September body shrank; a run was dropped"
+    if standing.challenger is not None:
+        assert standing.challenger.lineage == standing.published.lineage
+        assert _semver(standing.challenger.tool_version) > (0, 41, 2)
+        assert standing.attempts_needed is not None
