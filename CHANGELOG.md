@@ -177,7 +177,106 @@ All notable changes to this project are documented here. The format is based on
   "request_id": …}}` with the traceback logged under that id. The limiter is plain ASGI and
   unit-tested on the CPU core; the wired app is tested where the `hosted` extra is installed.
 
+### Changed
+
+- **The published measurement is displaced only by a re-measurement of the same thing, and the
+  artifact now says how close one is.** `provael.watch.published_measurement` summed attempts per
+  exact tool version and took the largest bucket. That was right about probes and wrong in two
+  ways that only show up once a lane runs on a schedule: a bucket keyed by exact version resets on
+  every release, so a canary that re-pinned each release accumulated toward nothing; and a bucket
+  counts a single-task run and a ten-task run in the same unit, so a long enough run on one task
+  would have replaced the ten-task headline. The rule is now `provael.watch.displacement`: bodies
+  are every real recorded run at one lineage and version (`Campaign`; a lineage is the policy,
+  the suite and, where the task ids carry one, the task suite — `smolvla` x `libero` x
+  `libero_object`), and a body supersedes the published one only by covering every task it
+  covered with at least as many attempts, a tie going to the newer version. Stricter, never
+  looser. The task suite is part of the key because the LIBERO adapter itself refuses to run two
+  of them as one job ("one run is one suite"): a Spatial or Goal null measured the same night is a
+  different measurement, not part of the Object campaign, and does not raise the bar for
+  re-measuring it. Bodies stay one version each on purpose:
+  `combine.py` refuses to pool shards across tool versions, so a body pooled across releases would
+  be a number no evidence manifest can be built over and no site can re-pin. `MeasurementRecord`
+  and `watch/measurements.json` rows carry the run's `tasks`; `watch/publish-freshness.json`
+  gains `published` (the body behind `measuredWith`, with its `taskSuite`) and `challenger` (the
+  newer body nearest to superseding it, with `attemptsNeeded` and `tasksMissing`); `provael
+  doctor` prints the same as a `re-measurement` row. On the committed tree the challenger is the
+  0.41.2 canary body: 43 of 550 attempts, one task of ten. Existing fields and their meanings are unchanged, so the site's
+  reader needs nothing.
+
+- **The scheduled GPU lane measures a declared campaign, shard by shard, instead of a probe.** Each
+  `gpu-scheduled.yml` run measured one task, eight arms, two seeds: sixteen episodes that fed the
+  age badge and could not move the published measurement. The arithmetic, plainly: the published
+  body is 550 attempts over ten tasks at 0.32.0; the lane added fourteen attempts on one task per
+  run, in a version bucket that reset every time a release re-pinned it. It measured on the current
+  release twice a week and could not have displaced the published campaign this decade, while its
+  own header priced that at a seventh of the credit. `studies/scheduled_campaign/plan.json` now
+  declares the grid: the same checkpoint, suite, ten tasks and horizon as the 0.32.0 body (read out
+  of its committed shards, and held to them by `tests/test_campaign.py`), every arm it ran plus the
+  `control` family, six seeds, so the completed campaign exceeds 550 attempts rather than tying
+  them. Sixty (task, seed) shards, one Modal L4 container each, twelve episodes, inside a 45-minute
+  timeout; `provael.campaign.next_shards` selects the next five from what is committed under
+  `results/gpu-scheduled/campaign-<pin>/`, so a missed run costs a week and not correctness and a
+  re-run of a slot that already landed selects the shards after it. The cadence stays Tuesday and
+  Friday, which the age badge derives; at five shards a run the ceiling is $3.00 a run and $26.05 a
+  month of the $30 credit (`tests/test_gpu_scheduled_plan.py` holds it), about $1.98 a run
+  expected, twelve runs, six weeks. Shards that raise no longer take the run with them: the ones
+  that landed are recorded and committed, then the job fails naming the rest. The pin is held for
+  the campaign (`tests/test_gpu_image_pin.py` allows it to lag while a challenger accumulates there
+  and requires every lane to pin the same version); do not bump it in a release PR while
+  `publish-freshness.json` shows a challenger at it. Stated in the workflow header rather than
+  implied: at the August-to-September cadence of nine minors in thirty-two days, the campaign
+  completes about a dozen minors behind. The lane makes the number move; it cannot make it current.
+
+### Added
+
+- **The campaign's shards combine into one artifact that names exactly which runs it rests on.**
+  After each scheduled run, `scripts/combine_campaign.py` combines every shard under
+  `results/gpu-scheduled/campaign-<version>/` into `campaign.json` beside them, through
+  `provael.combine.combine_reports` and `shard_digests` — the combiner `provael evidence-manifest`
+  already uses — never a second one. The rule, written in `provael.campaign`'s docstring and pinned
+  by `tests/test_campaign.py`: the artifact is written continuously and says `complete: false`,
+  `designation: campaign-in-progress` and `preliminary: true` until every planned shard is present;
+  it is never `report.json` (a combined view has no single execution behind it) and never a ledger
+  row (the campaign directory carries no execution manifest, so `provael.watch` counts the shards
+  and only the shards, exactly as the 0.32.0 campaign is recorded); and it is refused outright when
+  any shard lacks the four required provenance fields. `STALE_AFTER_RELEASES` and
+  `published_measurement` are untouched: a complete campaign at a newer version displaces the old
+  one on its own. `make check-campaign` joins `make check-docs`, with no wall-clock field anywhere.
+
+- **`watch/campaign.json` publishes the re-measurement's progress with a denominator.** A page
+  could say the published measurement was nine releases old and that something was measured today,
+  and could not say the one thing that changes how both read: that a like-for-like campaign is
+  being measured on a current release, how much is banked, and when it completes.
+  `scripts/gen_campaign_progress.py` derives it from the plan, the lane's own `PROVAEL_PIN` (by
+  AST, so the two cannot disagree), the committed shards, the attempts the published body sets as
+  the bar (`provael.watch.displacement`) and the workflow's own cron: `plan`, `toolVersion`,
+  `target.attemptsToDisplace`, `banked.attempts` and shards done and remaining, `cadence`, and
+  `projected.completion`, dated from the newest shard's `ended_at` plus the runs still needed — a
+  fact about the run, not about when the file was written, and null until the first shard lands.
+  Documented in `watch/README.md`; the website is unchanged in this release and can render it in
+  place of a flat STALE banner when it chooses.
+
 ### Fixed
+
+- **The scheduled lane's provenance fix never took effect, and the lane recorded the gap anyway.**
+  Every execution manifest the scheduled GPU lane committed reports `repository`, `commit`,
+  `dep_lock_digest` and `precision` under `missing_fields`. The 2026-09-15 run did so the day after
+  `gpu-scheduled.yml` gained `fetch-depth: 0` and a comment saying the commit gap was fixed: the
+  driver resolved the tag and passed `PROVAEL_COMMIT` correctly, and the container installed the
+  released 0.41.2 wheel, which reads no such variable — the fix lived in `main`, the lane runs
+  releases. `repository` and `dep_lock_digest` had never been supplied by any caller in any version;
+  `precision` was declared on the adapter base class and set by one adapter nobody has run.
+  `provael attack` now fills all four: `repository` from `PROVAEL_REPOSITORY` or the checkout's
+  origin, `commit` as before, `dep_lock_digest` as `uv.lock:sha256:<hex>` from a checkout's lock file
+  or `installed:sha256:<hex>` over the running interpreter's distribution set (a container that
+  pip-installed a release has no lock file; its installed set is the fact), and `precision` read off
+  the loaded policy's parameters (`fp32`/`bf16`/`fp16`) for LeRobot and `fp32` for the stub, which
+  computes in float32. The image now states `PROVAEL_REPOSITORY`. And the workflow's "Record the
+  measurement" step runs `scripts/check_provenance.py` before `provael watch --record` and refuses
+  any shard that lacks one of the four, naming the shard and the field — so until `PROVAEL_PIN` names
+  a release that carries these fields, the lane runs and records nothing, loudly, which is the
+  honest state. `tests/test_provenance_fields.py` holds each source and the end-to-end fact that a
+  stub run from this checkout carries none of the four gaps.
 
 - **`benchmark_eval_yaml` declared `libero--none` twice.** The registry already carries the
   `none` baseline, and the README's recipe prepends it for emphasis, so the committed benchmark

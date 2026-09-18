@@ -1,20 +1,59 @@
-"""Run the real SmolVLA x LIBERO red-team path on a Modal GPU — fork-safe, ~$0.49/run.
+"""The scheduled real-model lane: the next shards of a declared campaign, on Modal L4s.
 
 Provael's core is CPU-tested in CI; the headline credibility move is a cheap, *real-model* job.
-Modal (https://modal.com) spins up a GPU container on demand, runs the gated integration path,
-and shuts down. Pair with examples/gpu-ci/modal-gpu-tests.yml, which only triggers on a
-`gpu-tests` PR label so fork PRs can't spend.
+Modal (https://modal.com) spins up GPU containers on demand, runs the gated integration path, and
+shuts down. `.github/workflows/gpu-scheduled.yml` runs this twice a week.
 
-WHAT THAT NUMBER COSTS, AND WHY IT USED TO BE WRONG. This file claimed ~$0.02/run and was never
-recomputed after the run grew. `ATTACKS` expands to EIGHT arms (one baseline, three instruction,
-two visual, two injection) and `task_ids` defaults to a single task, so the old `--seeds 10` was
-80 episodes. The repo's measured anchor is 400 episodes in 15.4 L4-hours, ~139 s/episode, so 80
-episodes is ~3 hours against the 1h `timeout` below: it could never finish, and every scheduled
-run burned the full hour for nothing. Two seeds is 16 episodes, ~37 min, ~$0.49 at Modal's
-$0.7992/L4-hour. Change SEEDS and you change the bill — recompute it here rather than trusting
-this line.
+WHAT THIS LANE IS FOR, AND WHAT IT USED TO BE. Until 18 September 2026 each run was a probe: one
+task, eight arms, two seeds, sixteen episodes. It kept `watch/freshness.json` fed and it could never
+move `watch/publish-freshness.json`. The published measurement is the largest body of real runs at
+one lineage (policy, suite, task suite) and version that nothing supersedes
+(:func:`provael.watch.displacement`) — 550 attempts over ten tasks at 0.32.0 — and the probe
+added fourteen attempts on ONE task per run, under a version bucket that reset every time a release
+re-pinned it. Twice a week for ever would have reached nothing, and the header of its own workflow
+priced that at a seventh of the credit.
 
-    pip install modal
+So each run now measures the next shards of a **declared campaign**: `studies/scheduled_campaign/
+plan.json` names the checkpoint, the suite, the ten tasks, the arms and the seed count, modelled on
+the 0.32.0 campaign's own shape so the two are comparable and sized so the completed campaign
+exceeds its 550 attempts. A shard is one (task, seed) cell with every arm — small enough to fit one
+L4 hour with margin — and :mod:`provael.campaign` decides which shards come next from what is
+already committed under `results/gpu-scheduled/campaign-<PROVAEL_PIN>/`. The committed tree is the
+ledger: a missed run costs a week and not correctness, a re-run of a slot that already landed
+selects the shards after it, and nothing is measured twice.
+
+ONE RELEASE PER CAMPAIGN. `PROVAEL_PIN` is held for the whole campaign (see the constant), because
+:mod:`provael.combine` refuses to pool shards across tool versions and a campaign that could not be
+combined could not be published. `tests/test_gpu_image_pin.py` allows the pin to lag while the
+campaign is accumulating, and requires every lane to pin the same version.
+
+PROVENANCE, AND WHY THE FIRST SHARDS AT 0.41.2 WILL BE REFUSED. Every manifest this lane ever
+committed reported `repository`, `commit`, `dep_lock_digest` and `precision` as missing. The
+driver passed `PROVAEL_COMMIT` correctly from 14 September; the container installed the released
+0.41.2 wheel, which reads no such variable — the fix lived in `main` and the lane runs releases.
+`provael attack` now fills all four (the driver states the repository and the commit, the run
+digests its own dependency set, the adapter reports its precision), the workflow refuses to record
+a shard that lacks any of them, and both take effect only once `PROVAEL_PIN` names a release that
+carries them. Until that release ships and the pin moves, this lane runs and records nothing, and
+says so. That is the honest state, not a bug to route around.
+
+WHAT IT COSTS, DERIVED RATHER THAN QUOTED. The anchors are measured: the 0.32.0 suite ran 400
+episodes in 15.4 L4-hours across ten 40-episode containers, this lane's probe ran 16 episodes in
+~37 min — both ~139 s/episode including container setup, which the suite's `timing` stage put at
+~174 s. The functions below turn those into an expected and a ceiling cost per run and per month
+for the plan's shard shape, and `tests/test_gpu_scheduled_plan.py` holds the ceiling under the
+credit. `scripts/gpu_arm_plan.py` prices the manual arms the same way from the same rate.
+
+WHAT THIS CANNOT DO, STATED HERE SO NOBODY READS THE LANE AS A FIX FOR IT. Sixty shards at five a
+run is twelve runs, six weeks. Between v0.32.0 (8 August 2026) and v0.41.2 (9 September 2026) this
+project shipped nine minor releases in thirty-two days. At that cadence the body that displaces
+the published measurement lands roughly a dozen minors behind the current release on the day it
+completes — past the two-release window it is measured against. The lane makes the published
+measurement MOVE, repeatedly, and `watch/campaign.json` publishes how far along it is; it cannot
+make it current. What would: a slower release cadence while a campaign runs, or a larger credit.
+Neither is a code change, and neither is claimed here.
+
+    pip install modal && pip install -e .    # the driver reads the plan through provael.campaign
     modal run examples/gpu-ci/modal_provael_gpu.py
 
 WHY THE APP IS BUILT AT GLOBAL SCOPE. It used to be constructed inside `build_app()` so the module
@@ -23,26 +62,25 @@ GLOBAL scope for an app and its entrypoint, so with everything local to a functi
 and reported "has no functions or local entrypoints" — for 22 days, while the scheduled workflow
 reported success. `modal_libero_suite.py` records the same trap at its own line 83. Importability
 without modal bought nothing (no test asserted it) and cost the measurement the badge exists for.
+
+WHY NOTHING FROM `provael` IS IMPORTED AT MODULE SCOPE. The container re-imports this file to run
+:func:`redteam`, and the container's provael is the PINNED WHEEL, not this checkout: a module-level
+import of something the wheel lacks (or of the plan file, which is not mounted) would fail every
+shard at start. The plan is read inside the local entrypoint only, and the container is told what
+to run as plain arguments.
 """
 
 from __future__ import annotations
 
+import pathlib
 import subprocess
 
 import modal
 
-CKPT = "HuggingFaceVLA/smolvla_libero"
-ATTACKS = "none,instruction,visual,injection"
-
-#: Seeds per arm. 8 arms x SEEDS x 1 task episodes, at ~139 s/episode measured, against the 1h
-#: container timeout below. Two fits in ~37 min with real headroom; three is ~56 min and would
-#: race the cap. The freshness badge this feeds carries a timestamp and no rate, so this is a
-#: canary that the real-model path still runs — not a measurement, and not a published number.
-SEEDS = "2"
-
-#: Where the artifacts land, as ONE fact. It used to be the same string typed twice — once for the
-#: CLI's `--out` inside the container, once for the mirror path in the local entrypoint — and the
-#: workflow knew neither, so it went looking for `report.json` by modification time instead.
+#: Where the artifacts land on the runner, as ONE fact — one sub-directory per shard, named by the
+#: shard id the plan assigns, so the workflow can copy the whole tree into the campaign directory.
+#: It used to be the same string typed twice, once for `--out` and once for the mirror path, and
+#: the workflow knew neither, so it went looking for `report.json` by modification time instead.
 OUT_DIR = "runs/smolvla_libero"
 
 #: The local entrypoint writes :data:`OUT_DIR` here, last, after the artifacts are on disk. The
@@ -62,23 +100,87 @@ OUT_DIR = "runs/smolvla_libero"
 #: this repo is held: copied deliberately, then guarded against drifting.
 OUT_DIR_FILE = "gpu-scheduled-outdir.txt"
 
-#: The exact provael release this canary installs. `tests/test_gpu_image_pin.py` asserts it equals
-#: `provael.__version__`, so a release bump that forgets this line fails CI.
+#: Shards that raised, one per line, written beside :data:`OUT_DIR_FILE` so the workflow can keep
+#: the shards that succeeded AND fail the job. Absent when every shard returned.
+FAILED_SHARDS_FILE = "gpu-scheduled-failed-shards.txt"
+
+#: The repository whose release the container runs, stated by the driver because a wheel
+#: installed from PyPI has no remote to read. Lands in the execution manifest's `repository`.
+REPOSITORY = "provael/provael"
+
+#: The exact provael release every container installs.
 #:
-#: THIS LANE WAS GENUINELY UNPINNED, which is a different bug from its sibling and has a different
-#: consequence. `modal_libero_suite.py` pinned a commit and let it go stale; this file installed
-#: `provael[lerobot]` with no constraint at all, so the canary measured whatever PyPI served on the
-#: morning it ran. That is not reproducible in either direction: the same image definition builds
-#: different code next week, and a report from last month cannot be re-run against what produced
-#: it. It also silently split the two lanes — on 6 September 2026 the canary resolved 0.39.1 while
-#: the measurement arm was fitting zones on 0.32.0, so the two GPU lanes were measuring builds five
-#: releases apart while both looked healthy.
+#: THIS IS A CAMPAIGN PIN, AND IT IS ALLOWED TO LAG. `tests/test_gpu_image_pin.py` used to require
+#: it to equal `provael.__version__`, which is the right rule for a probe and the wrong rule for a
+#: campaign: bumping it on every release reset the body this lane was building, so the lane could
+#: accumulate toward nothing. The test now allows the pin to be the current version, OR the version
+#: of the re-measurement in progress (the `challenger` in `watch/publish-freshness.json`), OR the
+#: published measurement's version while it is still inside the release window. Every lane must
+#: still pin the same version as every other — two lanes on different builds is the incident the
+#: test was written for — and a pin that names none of the three fails, with the reason.
 #:
-#: A canary's job is to be recent, which is an argument for tracking the newest release, not for
-#: tracking it implicitly. Pinning and asserting against `__version__` gives the same currency and
-#: says which build produced the number.
+#: So: do NOT bump this in a release PR while `publish-freshness.json` shows a challenger at this
+#: version. Bump it when the body here has become the published measurement and a newer release
+#: exists, and the test will say so in those words. The campaign directory is named for this value.
+#:
+#: THIS LANE WAS GENUINELY UNPINNED before 0.41.2, which is a different bug with a different
+#: consequence. It installed `provael[lerobot]` with no constraint, so the probe measured whatever
+#: PyPI served on the morning it ran — not reproducible in either direction, and it silently split
+#: the two GPU lanes five releases apart while both looked healthy.
 PROVAEL_PIN = "0.41.2"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
+
+# --------------------------------------------------------------------------- #
+# cost, derived from measured anchors
+# --------------------------------------------------------------------------- #
+
+#: Modal's published L4 rate — the same figure `scripts/gpu_arm_plan.py` names, and a test holds
+#: the two equal.
+L4_USD_PER_HOUR = 0.7992
+#: Marginal seconds per episode once a container is up: (15.4 h x 3600 - 10 x 174 s) / 400.
+EPISODE_SECONDS = 134
+#: Container start to first step, measured by the suite's `timing` stage.
+SETUP_SECONDS = 174
+#: The per-container kill switch, and therefore the real cost ceiling: a hung container bills until
+#: it fires regardless of what it was asked to do. Forty-five minutes holds a twelve-episode shard
+#: (~30 min expected; ~42 min if every episode runs the full horizon) inside one L4 hour with
+#: margin, which is the order the campaign was sized to.
+SHARD_TIMEOUT_SECONDS = 2700
+#: Tuesday and Friday: 104.3 runs a year, 8.69 a month.
+RUNS_PER_MONTH = 104.3 / 12
+#: The credit this lane shares with the manual arms in `gpu-arm.yml`.
+MONTHLY_CREDIT_USD = 30.0
+
+
+def shard_seconds(arms: int) -> int:
+    """Expected wall clock for one shard of ``arms`` episodes, setup included."""
+    return SETUP_SECONDS + arms * EPISODE_SECONDS
+
+
+def expected_usd_per_run(arms: int, shards_per_run: int) -> float:
+    return shards_per_run * shard_seconds(arms) / 3600 * L4_USD_PER_HOUR
+
+
+def ceiling_usd_per_run(shards_per_run: int) -> float:
+    return shards_per_run * SHARD_TIMEOUT_SECONDS / 3600 * L4_USD_PER_HOUR
+
+
+def cost_table(arms: int, shards_per_run: int) -> str:
+    """The lane's cost, derived, in the shape the workflow log prints before spending."""
+    expected = expected_usd_per_run(arms, shards_per_run)
+    ceiling = ceiling_usd_per_run(shards_per_run)
+    return "\n".join(
+        [
+            f"shards per run    {shards_per_run} (one container each, {arms} episodes per shard)",
+            f"expected per run  ${expected:.2f} "
+            f"({shards_per_run} x {shard_seconds(arms)} s x ${L4_USD_PER_HOUR}/L4-hour)",
+            f"ceiling per run   ${ceiling:.2f} "
+            f"({shards_per_run} x {SHARD_TIMEOUT_SECONDS} s timeout)",
+            f"expected / month  ${expected * RUNS_PER_MONTH:.2f} at {RUNS_PER_MONTH:.2f} runs",
+            f"ceiling / month   ${ceiling * RUNS_PER_MONTH:.2f} "
+            f"of a ${MONTHLY_CREDIT_USD:.0f} credit",
+        ]
+    )
 
 
 def _pin_commit() -> str | None:
@@ -87,7 +189,8 @@ def _pin_commit() -> str | None:
     The container has no git checkout (it pip-installs the pinned release), so without this the
     execution manifest records `commit: null`. Resolved from `v{PROVAEL_PIN}` — the code that
     actually runs — never from the driver's HEAD, which may be a different commit. None when the
-    driver's checkout has no tags; the manifest then records the gap rather than a guess.
+    driver's checkout has no tags; the manifest then records the gap rather than a guess, and the
+    workflow's provenance gate refuses the shard.
     """
     try:
         out = subprocess.run(  # noqa: S603,S607 - fixed argv, no user input
@@ -118,40 +221,45 @@ image = (
         "MUJOCO_GL": "egl",
         "PYOPENGL_PLATFORM": "egl",
         "PROVAEL_INTEGRATION": "1",
-        # Provenance for execution-manifest.json: the pinned release's commit (see _pin_commit).
+        # Provenance for execution-manifest.json: the repository and the pinned release's commit
+        # (see _pin_commit). Read by provael releases that carry the fields; ignored by older ones,
+        # whose shards the workflow's provenance gate then refuses.
+        "PROVAEL_REPOSITORY": REPOSITORY,
         **({"PROVAEL_COMMIT": PIN_COMMIT} if PIN_COMMIT else {}),
     })
 )
 app = modal.App("provael-gpu-ci", image=image)
 
 
-@app.function(gpu="L4", timeout=3600)
-def redteam() -> tuple[str, dict[str, str]]:
-    """Run the gated real-model path and return the CLI's stdout AND its artifacts.
+@app.function(gpu="L4", timeout=SHARD_TIMEOUT_SECONDS)
+def redteam(
+    shard: str, task: str, seed: int, model: str, attacks: str, horizon: int
+) -> tuple[str, dict[str, str]]:
+    """Measure ONE shard — every arm on one task at one seed — and return stdout AND the artifacts.
+
+    Everything it needs arrives as arguments from the driver, which read the plan; the container
+    holds only the pinned wheel (see the module docstring on imports).
 
     RETURNING THE ARTIFACTS IS THE WHOLE POINT, not a convenience. This used to return stdout
     alone, so `report.json` was written inside the container and died with it. The workflow's
     ledger step looks for that file ON THE RUNNER, found nothing, emitted a warning and exited 0 —
-    so every scheduled run since the Modal credentials landed on 30 Aug 2026 reached a real policy,
-    printed a real ASR, and recorded nothing. `watch/freshness.json` sat at 2026-08-09 while the job
-    reported success twice a week, and provael.com served STALE MEASUREMENT off the back of it.
-
-    A lane that measures and discards is indistinguishable from a lane that never ran. See #181.
-
-    No Volume or NetworkFileSystem: the artifacts are small JSON and Markdown, they cross back in
-    the return value, and adding a storage resource would be one more thing to provision before the
-    measurement works.
+    so every run from 30 Aug to 3 Sep 2026 reached a real policy, printed a real ASR, and recorded
+    nothing while `watch/freshness.json` sat at 2026-08-09 and provael.com served STALE MEASUREMENT
+    off the back of it. A lane that measures and discards is indistinguishable from a lane that
+    never ran. See #181.
     """
-    import pathlib
-    import subprocess
-
-    out = pathlib.Path(OUT_DIR)
+    out = pathlib.Path(OUT_DIR) / shard
     cmd = [
         "provael", "attack", "--policy", "smolvla", "--suite", "libero",
-        "--model", CKPT, "--attacks", ATTACKS, "--seeds", SEEDS, "--horizon", "280",
-        "--seed", "0", "--out", str(out),
+        "--model", model, "--tasks", task, "--attacks", attacks, "--seeds", "1",
+        "--horizon", str(horizon), "--seed", str(seed), "--out", str(out),
     ]
-    stdout = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+    done = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if done.returncode != 0:
+        # The reason travels back in the exception, not only the exit code: the driver lists
+        # failed shards by this message, and "exit 1" would send someone to Modal's logs for it.
+        tail = "\n".join(done.stderr.strip().splitlines()[-12:])
+        raise RuntimeError(f"provael attack exited {done.returncode} on shard {shard}:\n{tail}")
 
     files = {
         str(path.relative_to(out)): path.read_text(encoding="utf-8")
@@ -160,35 +268,77 @@ def redteam() -> tuple[str, dict[str, str]]:
     }
     if not any(name.endswith("report.json") for name in files):
         raise RuntimeError(
-            f"the run produced no report.json under {out} — refusing to return a success that "
-            f"records nothing. Files seen: {sorted(files) or 'none'}"
+            f"shard {shard} produced no report.json under {out} — refusing to return a success "
+            f"that records nothing. Files seen: {sorted(files) or 'none'}"
         )
-    return stdout, files
+    return done.stdout, files
 
 
 @app.local_entrypoint()
 def main() -> None:
-    """Print the run, WRITE ITS ARTIFACTS to the runner, then declare where they went.
+    """Select the next shards from the committed tree, run them, WRITE the artifacts, declare where.
 
     WRITING THE ARTIFACTS IS NOT ENOUGH, which is the lesson of the 4 September 2026 run. It wrote
     all three of them and the ledger step still recorded nothing, because the workflow was
     searching for `report.json` by modification time rather than being told the path. Announcing
     the location is therefore part of producing the measurement, not a courtesy: see
     :data:`OUT_DIR_FILE`.
-    """
-    import pathlib
 
-    stdout, files = redteam.remote()
-    print(stdout)
+    A shard that raises does not take the others with it. The shards that returned are written and
+    declared, the ones that did not are listed in :data:`FAILED_SHARDS_FILE`, and the workflow
+    keeps the former and fails on the latter — losing four good shards to one bad one would be the
+    sixth version of the "measured and discarded" bug, and a green job with a missing shard would
+    be the first version of a new one.
+    """
+    # Lazy on purpose: the driver runs this checkout's provael; the container must not.
+    from provael.attacks.registry import resolve_attacks
+    from provael.campaign import campaign_dir, done_shards, load_plan, next_shards, shards
+
+    plan = load_plan()
+    directory = campaign_dir(PROVAEL_PIN)
+    done = done_shards(plan, directory)
+    todo = next_shards(plan, directory)
+    total = len(shards(plan))
+    arms = len(resolve_attacks(list(plan.attacks)))
+    print(
+        f"[plan] {plan.id} at provael {PROVAEL_PIN}: {len(done)} of {total} shard(s) committed "
+        f"under {directory}, {len(todo)} to run now"
+    )
+    if not todo:
+        print("[plan] the campaign is complete at this pin; nothing to measure. Advance the pin.")
+        return
+    print(f"[plan] this run: {', '.join(s.id for s in todo)}")
+    print(cost_table(arms, len(todo)))
 
     out = pathlib.Path(OUT_DIR)
-    for rel, text in files.items():
-        dest = out / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(text, encoding="utf-8")
+    written = 0
+    failed: list[str] = []
+    args = [(s.id, s.task, s.seed, plan.model, plan.attacks_arg, plan.horizon) for s in todo]
+    for shard, result in zip(todo, redteam.starmap(args, return_exceptions=True), strict=True):
+        if isinstance(result, BaseException):
+            failed.append(f"{shard.id}: {type(result).__name__}: {result}")
+            continue
+        stdout, files = result
+        print(stdout)
+        for rel, text in files.items():
+            dest = out / shard.id / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
+        written += 1
+
+    if failed:
+        pathlib.Path(FAILED_SHARDS_FILE).write_text("\n".join(failed) + "\n", encoding="utf-8")
+        print(f"[run] {len(failed)} shard(s) FAILED — listed in {FAILED_SHARDS_FILE}:")
+        for line in failed:
+            print(f"  {line}")
+    if written == 0:
+        raise SystemExit("every shard failed; nothing to declare, nothing to record")
 
     # LAST, and only once the artifacts are on disk: the file existing is the claim that they are
     # there, and its contents are where. A failed run leaves no file, so the ledger step fails
     # loudly instead of recording a measurement that was never produced.
     pathlib.Path(OUT_DIR_FILE).write_text(f"{OUT_DIR}\n", encoding="utf-8")
-    print(f"wrote {len(files)} artifact(s) to {out}/ — path declared in {OUT_DIR_FILE}")
+    print(
+        f"wrote {written} shard(s) to {out}/ — path declared in {OUT_DIR_FILE}; "
+        f"{len(done) + written} of {total} shards banked once this run is committed"
+    )
