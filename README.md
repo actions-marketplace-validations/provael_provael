@@ -426,7 +426,10 @@ Adversarial ASR: 67.1% (47/70) · all-episode observed-unsafe 67.1% (47/70)
 
 This writes `runs/stub/report.json` (machine-readable, byte-deterministic) and
 `runs/stub/report.md`. Per family, seed-0 ASR is **instruction 21/30**, **visual 14/20**,
-**injection 12/20** — exact, asserted numbers.
+**injection 12/20** — exact, asserted numbers. Since report schema 6 the report also carries
+`deployed_policy` — the policy that actually executed, as the adapter resolved it at load (class,
+checkpoint revision, action unnormaliser, controller convention, one digest) — beside `model`, the
+checkpoint that was requested; the two can differ, and a report now shows when they do.
 
 Other commands:
 
@@ -842,6 +845,11 @@ The intended paid surface is a **future operated service**; the in-repo hosted s
 pip install 'provael[hosted]'
 PROVAEL_ENABLE_EXPERIMENTAL_HOSTED=1 provael serve   # experimental reference server (operator-key, untrusted)
 ```
+
+It binds **loopback only** (`--host 127.0.0.1`); any wider bind needs the explicit `--allow-remote`
+opt-in, because the server has no authentication layer. Request bodies are capped at 16 MiB and
+refused with 413 rather than buffered, and an internal failure answers with a stable error shape and
+a request id — the traceback goes to the operator's log, never the response.
 
 The experimental endpoint is behind a **local feature flag** (`PROVAEL_HOSTED_LICENSE`) that is
 **not** authentication and lives **only** on the reference server — it never touches the free core.

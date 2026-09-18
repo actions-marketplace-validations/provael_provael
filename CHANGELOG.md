@@ -147,6 +147,27 @@ All notable changes to this project are documented here. The format is based on
 - **`docs/studies/pi0-openpi-transfer.md`** carries its design (n = 50 per arm, 5 seeds, horizon
   280) and Amendment 1: the first leg runs π0.5 through the native `pi05` adapter, with what that
   narrows and what it leaves open.
+- **A report now names the policy that executed, not only the checkpoint that was requested
+  (report schema 6; closes #227).** `RunReport.deployed_policy` is resolved by the adapter at load
+  — concrete class, the checkpoint loaded and its Hub revision read from the local cache, the
+  action unnormaliser actually applied (mode plus a digest over its statistics), the controller
+  convention (action dim, chunk, executed steps, clamp, post-processing pipeline) — under one
+  digest, beside `model`, which stays exactly what it was. Two deployments can agree on `model`
+  and be executable-inequivalent (Tai 2026, arXiv:2606.03724); now the report shows it, `combine`
+  refuses to pool shards whose deployed digests differ, the execution manifest's
+  `checkpoint_repo` / `checkpoint_revision` are filled from it, and the 17025-shaped test report
+  lists it as the item under test. Registered in `attest._REPORT_FIELDS_ADDED_IN[6]`, so every
+  attestation issued before schema 6 still verifies; `schemas/report.v6.schema.json` published.
+- **The reference server bounds what it accepts, where it binds and what it says (closes #229).**
+  The three serving-layer concerns found on another project's policy server, applied to provael's
+  own `provael serve` first: request bodies are capped at `MAX_BODY_BYTES` (16 MiB) and refused with
+  413 — before they are read when `Content-Length` says so, at the first byte over the limit when
+  streamed — never buffered; the bind host is loopback only unless the new `--allow-remote` flag is
+  given, checked before anything is imported or started; and no response body carries a traceback,
+  a path or a module name — validation errors return only location, message and type (FastAPI's
+  default echoes the input), and an unhandled failure returns `{"error": {"code": "internal_error",
+  "request_id": …}}` with the traceback logged under that id. The limiter is plain ASGI and
+  unit-tested on the CPU core; the wired app is tested where the `hosted` extra is installed.
 
 ### Fixed
 
