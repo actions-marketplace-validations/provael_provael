@@ -129,7 +129,13 @@ REPOSITORY = "provael/provael"
 #: consequence. It installed `provael[lerobot]` with no constraint, so the probe measured whatever
 #: PyPI served on the morning it ran — not reproducible in either direction, and it silently split
 #: the two GPU lanes five releases apart while both looked healthy.
-PROVAEL_PIN = "0.41.2"
+#:
+#: 0.42.0 IS THE FIRST RELEASE THIS LANE CAN RECORD FROM. The four provenance fields the Record step
+#: requires (`repository`, `commit`, `dep_lock_digest`, `precision`) reached the wheel in 0.42.0;
+#: on 0.41.2 every shard would have been refused. Bumped in the 0.42.0 release PR because the body
+#: at 0.41.2 is the published measurement (the workstation's 14 September runs) and this is the
+#: newer release — exactly the case the paragraph above allows.
+PROVAEL_PIN = "0.42.0"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
 
 # --------------------------------------------------------------------------- #
