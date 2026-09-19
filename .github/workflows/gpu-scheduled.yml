@@ -124,7 +124,7 @@ jobs:
       # persist-credentials: true, deliberately. This was false, which is the right default for a
       # lane that only reads — and this one has to push the measurement it produces or the whole
       # run is discarded. Scoped by `permissions: contents: write` on the job above.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ steps.bot.outputs.token }}  # the App token; see the steps above
           # Full history so the Modal driver can resolve the pinned release tag to its commit
