@@ -89,8 +89,15 @@ jobs:
           # declared its staleness, so nothing downstream complained — it just stopped recording
           # who ran it, which is the one field that separates a maintainer board from an
           # anonymous submission.
+          # The run the board aggregates is the one leaderboard/results/source.json names — never
+          # a path typed here. This step used to say `results/smolvla_libero_object_suite` (the
+          # 0.32.0 run); after leaderboard-rebuild.yml moved the board to the 14 September 2026
+          # re-measurement (#257) that literal would have rebuilt the OLD run and the guard below
+          # would have refused it as "measured_with moved". Read the pointer.
+          RUN="$(python -c 'import json; print(json.load(open("leaderboard/results/source.json"))["run"])')"
+          echo "re-stamping from ${RUN}"
           uv run provael leaderboard build \
-            --real results/smolvla_libero_object_suite \
+            --real "${RUN}" \
             --submitted-by provael --provenance maintainer-run \
             --sign --key "${KEY}" \
             --out leaderboard/results
@@ -133,22 +140,39 @@ jobs:
           print(f"    generated_at -> {d.get('generated_at')}  tool_version -> {d.get('tool_version')}")
           PY
 
+      - name: Keep the source pointer in step with the re-stamped board
+        # source.json's generatedAt is asserted equal to the board's generated_at
+        # (tests/test_leaderboard_version_claim.py); a re-stamp moves the board's and must move the
+        # pointer's with it. run, measuredWith and reason are untouched: nothing was re-measured.
+        run: |
+          python - <<'PY'
+          import json
+          board = json.load(open("leaderboard/results/leaderboard.json"))
+          path = "leaderboard/results/source.json"
+          pointer = json.load(open(path))
+          pointer["generatedAt"] = board.get("generated_at")
+          with open(path, "w", encoding="utf-8") as fh:
+              json.dump(pointer, fh, indent=1, sort_keys=True)
+              fh.write("\n")
+          print(f"source.json generatedAt -> {pointer['generatedAt']}")
+          PY
+
       - name: Commit
         env:
           REASON: ${{ inputs.reason }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- leaderboard/results/leaderboard.json; then
+          if git diff --quiet -- leaderboard/results/leaderboard.json leaderboard/results/source.json; then
             echo "board unchanged; nothing to commit"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add leaderboard/results/leaderboard.json
+          git add leaderboard/results/leaderboard.json leaderboard/results/source.json
           # No CI-skip token anywhere in this message, deliberately. One quoted in prose on the
           # 0.38.1 release was honoured by GitHub on the squashed merge commit and skipped every
           # workflow for it, including the release tag. This commit SHOULD run CI.
           git commit -m "chore(leaderboard): re-stamp the signed board (no re-measurement)" \
                      -m "Reason: ${REASON}" \
-                     -m "Re-aggregated from the same committed reports. measured_with and stale are unchanged and asserted so by the workflow; only generated_at, commit and tool_version move."
+                     -m "Re-aggregated from the committed run leaderboard/results/source.json names. measured_with is unchanged and asserted so by the workflow; stale may only move false -> true (the release moved past the board); generated_at, commit and tool_version move."
           git push

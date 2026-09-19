@@ -11,7 +11,7 @@ simply not re-typed a number.
 
 | file | answers | written by |
 | --- | --- | --- |
-| `registry.json` | how many attacks, families, policies and suites are registered, and how many of each are runnable rather than scaffolding | `scripts/gen_registry_artifact.py` |
+| `registry.json` | how many attacks, families, policies and suites are registered, how many of each are runnable rather than scaffolding, how many adversarial families have met a real policy (`realPolicyTested`), and how many distinct real policies have a committed applicable adversarial episode (`realPoliciesTested`, with the names) | `scripts/gen_registry_artifact.py` |
 | `release.json` | which version is current, its tag, its PyPI string, and the project's release-drift window | `scripts/gen_release_artifact.py` |
 | `measurements.json` | one row per committed measurement: when, on what version, with what result, and whether it counts | `scripts/gen_measurement_ledger.py` |
 | `freshness.json` | when **anything** was last measured, as a shields.io badge | `provael watch` |
@@ -66,6 +66,35 @@ every release. `provael doctor` prints the same as a `re-measurement` row.
 `measurements.json` rows carry `tasks` for the same reason: a fourteen-attempt canary and a
 ten-shard campaign are not the same kind of row, and a reader should not have to open either report
 to tell them apart.
+
+## What a ledger row carries, since 0.43.0
+
+Each row now names what a consumer used to have to re-derive from the run — and re-derived
+differently in different places: the checkpoint (`model`), the adversarial numerator and
+denominator (`adversarialSuccesses` / `adversarialAttempts`) and the benign control's
+(`benignSuccesses` / `benignAttempts`), so nobody divides the all-episode `asr` again; the
+predicate (`calibrated`) and `evidenceState`; `intervalMethod`, which is the episode-level Wilson
+score for every per-run interval (a sharded run's task-clustered interval lives in its
+`aggregate.json` under its own name and is a different estimate); and `published` — whether the
+row belongs to the body behind the published headline, by the same `displacement` rule
+`publish-freshness.json` applies. `publishedLineage` at the top says which body that is. A row
+that is newer than the published body and not in it says `published: false`, which is the
+distinction between "the newest number" and "the number a reader is shown".
+
+## Four dates, kept apart
+
+A reader asking "how old is this number" is asking one of four different questions, and this
+directory answers each with a different field rather than a blended one:
+
+| date | where it lives | what it dates |
+| --- | --- | --- |
+| execution date | `measurements.json` → `measuredAt` (the manifest's `ended_at`) | when the run finished measuring |
+| tool release date | `CHANGELOG.md` (the `[x.y.z] — date` heading); `release.json` names the version, not the day | when the code that measured it was released |
+| assembly commit | the commit a consumer pins (`repo-facts.json` upstream, `evidence-manifest.json`'s `commit`) | the repository state a number was read from |
+| source-review date | beside the claim it reviewed (a "verified 12 September 2026" in the docs, a `_AS_OF` in the site) | when a human last checked an outside source |
+
+None of these is written from this directory's wall clock. The August and September runs stay
+separate rows with their own execution dates; nothing here averages them into one.
 
 ## The campaign, and what `campaign.json` says about it
 

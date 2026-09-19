@@ -48,24 +48,36 @@ A machine-readable **security.txt** ([RFC 9116](https://www.rfc-editor.org/rfc/r
 
 ## Regulatory context, stated so you know what we are and are not
 
-Provael is open-source software published by an open-source steward. It is not a product with
-digital elements placed on the EU market by a manufacturer.
+One dated statement of the facts, and no scope conclusion this project is not in a position to draw.
+As of **19 September 2026**:
 
-Under the EU Cyber Resilience Act, the reporting obligations for manufacturers apply **from
-11 September 2026**: an early warning within 24 hours of becoming aware of an actively exploited
-vulnerability or severe incident, a full notification within 72 hours, and a final report no later
-than 14 days after a corrective measure is available, or within a month of the 72-hour notification
-for a severe incident. Reporting runs through the ENISA Single Reporting Platform.
+- `provael` is Apache-2.0 software, published free on PyPI and GitHub, and maintained by **one
+  natural person**. There is **no legal entity** behind it.
+- Paid assessment services are offered against it at listed prices. Nothing has sold: zero customers,
+  zero revenue.
+- **No legal advice has been taken** on whether the EU Cyber Resilience Act (Regulation (EU)
+  2024/2847) places manufacturer obligations on this project. The test is whether a product with
+  digital elements is made available on the EU market *in the course of a commercial activity*;
+  whether offering paid services beside freely-licensed software meets it is the open question, and
+  it is counsel's to settle, not this file's. Until it is settled this project claims **neither**
+  that it is in scope **nor** that it is exempt.
+- The Act's **open-source software steward** route (Article 3(14)) is available only to a *legal
+  person*. There is no entity here, so the project is **not** a steward and does not claim the
+  steward obligations or their later reporting date. If an entity is incorporated, this section
+  changes with it — and counsel is asked before it does.
+- What the timetable would mean if the project were in scope: manufacturer reporting under Article 14
+  applies from 11 September 2026 (early warning within 24 hours of awareness of an actively exploited
+  vulnerability or severe incident, notification within 72 hours, a final report within 14 days of a
+  corrective measure being available, or within a month of the 72-hour notification for a severe
+  incident, through the ENISA Single Reporting Platform); steward reporting under Article 24(3)
+  applies from 11 December 2027, per Article 71(2). Source: [European Commission, Cyber Resilience
+  Act reporting obligations](https://digital-strategy.ec.europa.eu/en/policies/cra-reporting),
+  verified 12 September 2026.
 
-Open-source software stewards are subject to their own reporting obligation under **Article 24(3)
-only from 11 December 2027**, per Article 71(2). Source: [European Commission, Cyber Resilience Act
-reporting obligations](https://digital-strategy.ec.europa.eu/en/policies/cra-reporting), verified
-12 September 2026.
-
-So the 24-hour early-warning duty **does not bind this project today**. The timeline above is
-published now anyway, for two reasons: a disclosure policy written under deadline pressure is worse
-than one written without it, and anyone integrating this harness into a product that *is* in scope
-needs to know what they can expect from upstream.
+The disclosure route and the response timings above are published now, whichever way the scope
+question lands: a disclosure policy written under deadline pressure is worse than one written
+without it, and anyone integrating this harness into a product that *is* in scope needs to know what
+they can expect from upstream.
 
 ### If you are a manufacturer in scope
 
@@ -82,6 +94,20 @@ We are not your CSIRT and cannot report on your behalf. The notification duty is
 - The core installs no GPU/ML stack and makes no network calls; real policies and the LIBERO
   simulator are isolated behind the optional `[lerobot]` extra and a `PROVAEL_INTEGRATION=1`
   gate. Releases publish to PyPI via OIDC trusted publishing (no stored tokens).
+
+### Network egress, by path
+
+Three paths, three different answers; stating them together is what stops the CPU claim being read
+as a claim about the GPU path.
+
+| path | downloads and egress | credentials |
+| --- | --- | --- |
+| **CPU CLI** (`pip install provael`, the `stub` / `reach` / `humanoid` suites, every export) | none at run time. `pip install` itself reaches PyPI once. | none read; the execution manifest's environment block is an allow-list (`provael.execution.ENV_ALLOWLIST`) and secrets never reach an artifact |
+| **optional model loaders** (`[lerobot]`, `[openvla]`, `[openpi]`) | the Hugging Face Hub for the checkpoint the run names (and LeRobot's simulator assets); `[openpi]` opens a websocket to the policy server the operator configures. Nothing else. | a Hub token if the checkpoint is gated, supplied by the operator's own environment; never logged, never written into `report.json` or the manifest |
+| **customer execution** (a paid assessment) | the customer's network, under the customer's policy; the isolated-environment variant limits egress to the checkpoint host — see [the procedure](docs/maintainers/private-assessment-procedure.md) | granted and revoked by the customer's access owner |
+
+`provael serve` (the `[hosted]` extra) binds loopback only unless `--allow-remote` is passed, has no
+authentication, and is not used for private workloads.
 - The tool ships **no real-world-harm payloads** and drives **no physical robots**. Misuse
   against systems you do not own or have permission to test is out of scope and not condoned —
   see [SAFETY.md](SAFETY.md).
@@ -101,8 +127,12 @@ vulnerabilities in Provael**, and the core install (6 deps, no GPU/ML stack) is 
   not reachable through Provael, on CPU or GPU. If you **separately** run LeRobot's async inference,
   follow the upstream advisory (fixed in LeRobot PR #3048, which replaces pickle with
   safetensors + JSON) — require auth/mTLS on the PolicyServer and upgrade once a fixed release is
-  verified against the `smolvla_libero` path. Pinning Provael's extra to that fixed release is a
-  tracked follow-up (the `smolvla_libero` glue is verified only against `0.5.1` today).
+  verified against the `smolvla_libero` path. **Pinning Provael's extra to that fixed release is a
+  bounded, explicit exception, not a forgotten one:** the pin stays at `0.5.1` until a fixed
+  release has been validated against the supported checkpoint on a GPU (the adapter's per-step
+  rollout was read off this version's evaluator, and 0.6.x moved import paths and raised the torch
+  floor — `pyproject.toml` records why), and it moves by a validated run, never by a version-string
+  edit. Enabling LeRobot's separate inference server is not a shortcut to that and is not done.
 
 ## Scope under the EU Cyber Resilience Act
 
@@ -113,29 +143,10 @@ Two different questions get asked here, and they have different answers.
 
 ### Does the CRA place obligations on this repository?
 
-We have not taken legal advice, and we are not going to publish a scope conclusion we cannot
-back. What we can state is the test and the facts.
-
-The test for manufacturer obligations is whether a product with digital elements is made
-available on the EU market **in the course of a commercial activity**. Free and open-source
-software supplied outside a commercial activity is not in scope.
-
-The facts, as of 5 September 2026:
-
-- `provael` is Apache-2.0 and published free on PyPI and GitHub.
-- Paid assessment services are offered against it, at listed prices.
-- Nothing has sold. Zero customers, zero revenue.
-- There is no legal entity. The project is maintained by one natural person.
-
-Whether offering paid services alongside freely-licensed software makes that software
-"supplied in the course of a commercial activity" is the open question, and it is not one this
-project gets to settle by asserting an answer in its own security policy.
-
-The **open-source software steward** route is cleaner, because it turns on a checkable fact
-rather than a judgement. A steward under Article 3(14) must be a *legal person*. There is no
-entity here, so the Article 24 steward obligations — whose reporting duty under Article 24(3)
-begins on 11 December 2027, per Article 71(2), as stated above — do not attach on that basis. If
-an entity is incorporated, this section changes with it.
+The facts are the dated statement under *Regulatory context* above, and they are not repeated here
+so that the two sections cannot drift apart: no entity, no counsel taken, the steward route
+unavailable to a natural person, the manufacturer question open. This project does not settle that
+question by asserting an answer in its own security policy.
 
 ### Does the CRA place obligations on you, if you integrate Provael?
 

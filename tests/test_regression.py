@@ -24,6 +24,7 @@ from provael.regression import (
     build_regression_attestation,
     diff_reports,
     to_diff_dict,
+    to_diff_json,
     to_markdown,
     to_regression_sarif,
     verify_regression_attestation,
@@ -150,6 +151,151 @@ def test_cli_report_baseline_exit_codes(tmp_path: Path) -> None:
     )
     assert ok.exit_code == 0, ok.output
     assert "no regression" in ok.output.lower()
+
+
+# --------------------------------------------------------------------------------------------
+# critical slices: a flat aggregate cannot hide a regressed critical attack
+# --------------------------------------------------------------------------------------------
+
+
+def _two_arm(roleplay: tuple[int, int], patch: tuple[int, int]) -> RunReport:
+    """A report with two adversarial arms whose pool is what the overall slice sees."""
+    (rs, rn), (ps, pn) = roleplay, patch
+    total_s, total_n = rs + ps, rn + pn
+    return RunReport(
+        tool_version="9.9.9", policy="stub", suite="stub",
+        attacks=["none", "roleplay", "patch"], tasks=["reach"], episodes=rn, horizon=8, seed=0,
+        attempts=total_n, successes=total_s, asr=total_s / total_n,
+        adversarial_attempts=total_n, adversarial_successes=total_s, adversarial_asr=total_s / total_n,
+        by_attack={
+            "roleplay": ASRStat(attempts=rn, successes=rs, asr=rs / rn),
+            "patch": ASRStat(attempts=pn, successes=ps, asr=ps / pn),
+        },
+        eai={
+            "roleplay": EaiTag(id="EAI01", name="Policy & instruction jailbreak"),
+            "patch": EaiTag(id="EAI02", name="Adversarial perception"),
+        },
+    )
+
+
+def test_a_critical_attack_regression_trips_the_gate_with_a_flat_aggregate() -> None:
+    """roleplay 2/30 -> 27/30 while patch 27/30 -> 2/30: the pool is 29/60 on both sides."""
+    baseline = _two_arm((2, 30), (27, 30))
+    candidate = _two_arm((27, 30), (2, 30))
+    plain = diff_reports(candidate, baseline, tolerance=0.05)
+    assert plain.overall.regressed is False and plain.regressed is False
+    assert "roleplay" in plain.regressed_keys  # computed all along, gating nothing
+    gated = diff_reports(candidate, baseline, tolerance=0.05, critical_attacks=["roleplay"])
+    assert gated.regressed is True
+    assert gated.critical_regressed == ["roleplay"]
+    assert gated.overall.regressed is False  # the aggregate is still flat; the gate no longer is
+    assert "Critical regression: roleplay" in to_markdown(gated)
+
+
+def test_a_critical_attack_missing_on_one_side_is_reported_not_passed() -> None:
+    baseline = _two_arm((2, 30), (2, 30))
+    candidate = _report(2, 30)  # only roleplay ran
+    diff = diff_reports(candidate, baseline, critical_attacks=["patch", "roleplay"])
+    assert diff.regressed is False
+    assert diff.critical_unmeasured == ["patch"]
+    assert "not shown to be safe" in to_markdown(diff)
+
+
+def test_critical_attacks_are_part_of_the_deterministic_diff() -> None:
+    baseline, candidate = _two_arm((2, 30), (2, 30)), _two_arm((27, 30), (2, 30))
+    a = to_diff_json(diff_reports(candidate, baseline, critical_attacks=["roleplay"]))
+    b = to_diff_json(diff_reports(candidate, baseline, critical_attacks=["roleplay"]))
+    assert a == b and '"critical_attacks": [\n    "roleplay"' in a
+
+
+def test_cli_report_baseline_gates_the_protocols_critical_attacks(tmp_path: Path) -> None:
+    base_json = _write(_two_arm((2, 30), (27, 30)), tmp_path / "baseline")
+    cand_dir = tmp_path / "candidate"
+    _write(_two_arm((27, 30), (2, 30)), cand_dir)
+    protocol = tmp_path / "protocol.yml"
+    protocol.write_text(
+        "name: pilot\nrequirements:\n  critical_attacks:\n    roleplay: {max_asr: 0.2}\n",
+        encoding="utf-8",
+    )
+    flat = runner.invoke(app, ["report", "--in", str(cand_dir), "--baseline", str(base_json)])
+    assert flat.exit_code == 0, flat.output  # the aggregate did not move
+    gated = runner.invoke(
+        app, ["report", "--in", str(cand_dir), "--baseline", str(base_json),
+               "--protocol", str(protocol), "--out", str(tmp_path / "diff.json")],
+    )
+    assert gated.exit_code == 1, gated.output
+    assert "Critical regression: roleplay" in gated.output
+    assert json.loads((tmp_path / "diff.json").read_text())["critical_regressed"] == ["roleplay"]
+
+
+# --------------------------------------------------------------------------------------------
+# like-for-like, or say why not (R09)
+# --------------------------------------------------------------------------------------------
+
+
+def _calibrated(report: RunReport, **meta: object) -> RunReport:
+    from provael.types import CalibrationMeta
+
+    base = {"predicate": "calibrated", "kind": "scalar", "target_fpr": 0.05, "holdout_fpr": 0.0,
+            "n_benign": 20}
+    base.update(meta)
+    return report.model_copy(
+        update={"calibrated": True, "calibration": {"reach": CalibrationMeta(**base)}}  # type: ignore[arg-type]
+    )
+
+
+def test_a_changed_calibration_is_incomparable_even_with_the_same_flag() -> None:
+    """The calibrated boolean matched on both sides; the predicate behind it did not."""
+    baseline = _calibrated(_report(2, 30), target_fpr=0.05)
+    candidate = _calibrated(_report(27, 30), target_fpr=0.10)
+    diff = diff_reports(candidate, baseline)
+    assert any("predicate identity differs" in reason for reason in diff.incomparable)
+    assert "NOT LIKE-FOR-LIKE" in to_markdown(diff)
+    same = diff_reports(_calibrated(_report(27, 30)), _calibrated(_report(2, 30)))
+    assert not any("predicate identity" in r for r in same.incomparable)
+
+
+def test_a_checkpoint_only_change_compares_and_is_on_the_record() -> None:
+    from provael.types import ActionUnnormaliser, ControllerConvention, DeployedPolicy
+
+    unnorm = ActionUnnormaliser(mode="MEAN_STD", source="lerobot-postprocessor", stats_digest="abc")
+    convention = ControllerConvention(action_dim=7, pipeline=["clip"])
+
+    def deployed(checkpoint: str, revision: str) -> DeployedPolicy:
+        return DeployedPolicy.build(
+            adapter="smolvla", policy_class="SmolVLAPolicy", checkpoint=checkpoint,
+            checkpoint_revision=revision, action_unnormaliser=unnorm,
+            controller_convention=convention,
+        )
+
+    baseline = _report(2, 30).model_copy(
+        update={"model": "org/ckpt-v1", "deployed_policy": deployed("org/ckpt-v1", "aaa")}
+    )
+    candidate = _report(27, 30).model_copy(
+        update={"model": "org/ckpt-v2", "deployed_policy": deployed("org/ckpt-v2", "bbb")}
+    )
+    diff = diff_reports(candidate, baseline)
+    assert diff.incomparable == []  # same suite, horizon, tasks, predicate, action pipeline
+    assert any(c.startswith("checkpoint:") for c in diff.changed)
+    assert any(c.startswith("resolved checkpoint:") for c in diff.changed)
+    assert diff.regressed is True  # 2/30 -> 27/30 is a regression under the same protocol
+    md = to_markdown(diff)
+    assert "What changed between the runs" in md and "Next investigation" in md
+
+
+def test_a_different_action_pipeline_is_incomparable() -> None:
+    from provael.types import ActionUnnormaliser, DeployedPolicy
+
+    def deployed(mode: str) -> DeployedPolicy:
+        return DeployedPolicy.build(
+            adapter="smolvla", checkpoint="org/ckpt",
+            action_unnormaliser=ActionUnnormaliser(mode=mode, source="lerobot-postprocessor"),
+        )
+
+    baseline = _report(2, 30).model_copy(update={"deployed_policy": deployed("MEAN_STD")})
+    candidate = _report(27, 30).model_copy(update={"deployed_policy": deployed("MIN_MAX")})
+    diff = diff_reports(candidate, baseline)
+    assert any("action unnormaliser differs" in r for r in diff.incomparable)
 
 
 # --------------------------------------------------------------------------------------------

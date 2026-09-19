@@ -20,10 +20,15 @@ A count of registered families says what code exists, not what has been measured
 that actually ships:
 
 * **Real-policy tested** — families exercised against a real VLA policy in a real simulator. That
-  is 3 (``instruction``, ``visual``, ``injection``), from one committed SmolVLA x LIBERO run — and
-  two of those three returned **honest nulls**, which is a measurement, not a gap.
+  was 3 (``instruction``, ``visual``, ``injection``) from one committed SmolVLA x LIBERO run when
+  this module was written, and is 8 since the 14 September 2026 breadth probe — most of them
+  measured nulls, which is a measurement, not a gap.
 * **Stub-validated only** — the remaining families run on the deterministic CPU fixture and have
   never met a real policy. Registered, runnable, unmeasured against a real model.
+* **Real policies tested** — distinct real policies with a committed applicable adversarial
+  episode (``realPoliciesTested`` / ``realPolicyNames``). Two since 18 September 2026: SmolVLA and
+  π0.5, the latter a three-seed preliminary leg. A policy is not an architecture, and one
+  checkpoint is not a survey; the count says how many adapters have a committed arm, nothing more.
 
 A consumer that prints only "15 families" invites a reader to assume 15 measured families. So
 :func:`coverage` returns the breakdown and :func:`coverage_line` renders all of it on one line.
@@ -77,6 +82,12 @@ class Coverage:
     suites: int
     #: Families exercised against a real policy in a real simulator, sorted.
     real_policy_families: tuple[str, ...] = ()
+    #: Distinct real policies that received at least one applicable adversarial episode in a
+    #: committed run, sorted by adapter name. Derived from the same scan as
+    #: :attr:`real_policy_families`, for the same reason: the day a second architecture lands a
+    #: committed arm (18 September 2026, ``pi05`` on LIBERO-Object) the count must rise on its
+    #: own, and it must not rise for an adapter that is merely registered.
+    real_policy_names: tuple[str, ...] = ()
     #: Registered adversarial families never run against a real policy, sorted.
     stub_only_families: tuple[str, ...] = field(default_factory=tuple)
     #: Registered policy adapters DECLARED as scaffolding, sorted. Read from
@@ -86,6 +97,12 @@ class Coverage:
     scaffolding_policy_names: tuple[str, ...] = field(default_factory=tuple)
     #: Registered suites DECLARED as scaffolding, sorted. Same reasoning.
     scaffolding_suite_names: tuple[str, ...] = field(default_factory=tuple)
+    #: Registered defenses whose execution manifest shows them applied on a REAL policy in a
+    #: committed run, sorted. Derived from `execution-manifest.json` (`defense`, `policy`), never
+    #: from a study page: both shipped defenses carry a study measured on the stub fixture, which
+    #: is a protocol exercise and not risk reduction on a real policy. Empty until a real-policy
+    #: defended arm is committed.
+    real_policy_defense_names: tuple[str, ...] = field(default_factory=tuple)
     #: Committed runs executed on physical hardware. Zero today; the website renders from it.
     hardware_results: int = 0
     #: False when no results directory was found at all — a pip-installed wheel, which does not
@@ -114,8 +131,23 @@ class Coverage:
         return len(self.real_policy_families)
 
     @property
+    def real_policies_tested(self) -> int:
+        """How many distinct real policies have received an applicable adversarial episode.
+
+        A policy is not an architecture, and one checkpoint is not a survey: two counts here means
+        two adapters each ran at least one committed arm, which says nothing about how many seeds,
+        arms or tasks either ran. The per-run artifacts carry that.
+        """
+        return len(self.real_policy_names)
+
+    @property
     def stub_validated_only(self) -> int:
         return len(self.stub_only_families)
+
+    @property
+    def real_policy_defenses(self) -> int:
+        """Defenses with a committed defended arm on a real policy — not defenses with a study."""
+        return len(self.real_policy_defense_names)
 
     # ── Registered vs runnable ────────────────────────────────────────────────
     # A third convention, and the one consumers kept getting wrong. `policies` and `suites` count
@@ -178,6 +210,64 @@ def _real_policy_families(results_dir: Path = RESULTS_DIR) -> set[str]:
     return found
 
 
+def _real_policy_names(results_dir: Path = RESULTS_DIR) -> set[str]:
+    """Policies with at least one APPLICABLE adversarial episode against a real suite.
+
+    The same scan as :func:`_real_policy_families`, the same exclusions and the same applicability
+    test, collecting the report's ``policy`` instead of each episode's ``family``. Derived, never
+    declared, for the same reason: a count of "policies measured" that lived in a constant would
+    be edited the day an adapter was registered rather than the day it was run. A scaffolding
+    adapter with no committed run does not appear here; a policy whose every committed episode
+    was not applicable does not either, because nothing was measured on it.
+    """
+    found: set[str] = set()
+    if not results_dir.is_dir():
+        return found
+    for report_path in sorted(results_dir.rglob("report.json")):
+        try:
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):  # pragma: no cover - a malformed committed report
+            continue
+        policy = data.get("policy")
+        if not policy or policy in FIXTURE_POLICIES or data.get("suite") in FIXTURE_SUITES:
+            continue
+        for result in data.get("results", []):
+            family = result.get("family")
+            if (
+                family
+                and family not in NON_ADVERSARIAL_FAMILIES
+                and result.get("applicable", True) is not False
+            ):
+                found.add(str(policy))
+                break
+    return found
+
+
+def _real_policy_defenses(results_dir: Path = RESULTS_DIR) -> set[str]:
+    """Defenses applied on a real policy in a committed run, read from the execution manifests.
+
+    The defense identity lives in ``execution-manifest.json`` (``report.json`` deliberately does
+    not carry it — see :mod:`provael.execution`), so this is where "was this defense ever run on a
+    real policy" can be answered. A study page measured on the stub fixture does not count, for
+    the same reason a stub attack result does not: it exercises the protocol, not the policy.
+    """
+    found: set[str] = set()
+    if not results_dir.is_dir():
+        return found
+    for manifest_path in sorted(results_dir.rglob("execution-manifest.json")):
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):  # pragma: no cover - a malformed committed manifest
+            continue
+        defense = data.get("defense")
+        if not defense or data.get("policy") in FIXTURE_POLICIES:
+            continue
+        if data.get("suite") in FIXTURE_SUITES:
+            continue
+        found.add(str(defense))
+    return found
+
+
 def _hardware_runs(results_dir: Path = RESULTS_DIR) -> int:
     """Count committed runs under ``results/hardware/``.
 
@@ -191,26 +281,67 @@ def _hardware_runs(results_dir: Path = RESULTS_DIR) -> int:
     return sum(1 for _ in hardware.rglob("report.json"))
 
 
+@dataclass(frozen=True)
+class RegistryCounts:
+    """The registry-only counts, in the ONE convention every surface uses.
+
+    Adversarial = registered minus the baseline family and the harmless-variation control family.
+    :mod:`provael.manifest` used to subtract the baseline alone and published 18 families / 43
+    attacks beside this module's 17 / 39; the website then carried a conversion between the two
+    conventions. There is one convention now, computed here, and the manifest reads it.
+    """
+
+    attacks_total: int
+    adversarial_attacks: int
+    attacks_baseline: int
+    attacks_control: int
+    families_total: int
+    adversarial_families: int
+    families_baseline: int
+    families_control: int
+
+
+def registry_counts() -> RegistryCounts:
+    """Count the registry without touching the filesystem (usable from a wheel and a manifest)."""
+    by_family: dict[str, int] = {}
+    for ctor in ATTACKS.values():
+        family = ctor().family
+        by_family[family] = by_family.get(family, 0) + 1
+    baseline_attacks = by_family.get(BASELINE_FAMILY, 0)
+    control_attacks = by_family.get(CONTROL_FAMILY, 0)
+    adversarial_families = set(by_family) - NON_ADVERSARIAL_FAMILIES
+    return RegistryCounts(
+        attacks_total=len(ATTACKS),
+        adversarial_attacks=len(ATTACKS) - baseline_attacks - control_attacks,
+        attacks_baseline=baseline_attacks,
+        attacks_control=control_attacks,
+        families_total=len(by_family),
+        adversarial_families=len(adversarial_families),
+        families_baseline=1 if baseline_attacks else 0,
+        families_control=1 if control_attacks else 0,
+    )
+
+
 def coverage(results_dir: Path = RESULTS_DIR) -> Coverage:
     """Compute every published coverage count from the registries and the committed runs."""
+    counts = registry_counts()
     families = {ctor().family for ctor in ATTACKS.values()}
     adversarial_families = families - NON_ADVERSARIAL_FAMILIES
-    adversarial_attacks = [
-        n for n, ctor in ATTACKS.items() if ctor().family not in NON_ADVERSARIAL_FAMILIES
-    ]
 
     real = _real_policy_families(results_dir) & adversarial_families
     return Coverage(
-        attacks_total=len(ATTACKS),
-        adversarial_attacks=len(adversarial_attacks),
-        families_total=len(families),
-        adversarial_families=len(adversarial_families),
+        attacks_total=counts.attacks_total,
+        adversarial_attacks=counts.adversarial_attacks,
+        families_total=counts.families_total,
+        adversarial_families=counts.adversarial_families,
         policies=len(POLICIES),
         suites=len(SUITES),
         real_policy_families=tuple(sorted(real)),
+        real_policy_names=tuple(sorted(_real_policy_names(results_dir))),
         stub_only_families=tuple(sorted(adversarial_families - real)),
         scaffolding_policy_names=tuple(sorted(SCAFFOLDING_POLICIES)),
         scaffolding_suite_names=tuple(sorted(SCAFFOLDING_SUITES)),
+        real_policy_defense_names=tuple(sorted(_real_policy_defenses(results_dir))),
         hardware_results=_hardware_runs(results_dir),
         results_dir_present=results_dir.is_dir(),
     )
@@ -258,8 +389,12 @@ def coverage_json(cov: Coverage | None = None) -> str:
             "attacksTotal": c.attacks_total,
             "realPolicyTested": c.real_policy_tested,
             "realPolicyFamilies": list(c.real_policy_families),
+            "realPoliciesTested": c.real_policies_tested,
+            "realPolicyNames": list(c.real_policy_names),
             "stubValidatedOnly": c.stub_validated_only,
             "stubOnlyFamilies": list(c.stub_only_families),
+            "realPolicyDefenses": c.real_policy_defenses,
+            "realPolicyDefenseNames": list(c.real_policy_defense_names),
             "hardwareResults": c.hardware_results,
             # The one field a consumer must branch on. False => the three evidence counts above
             # were never scanned and must not be rendered; a wheel does not package `results/`.
@@ -271,7 +406,15 @@ def coverage_json(cov: Coverage | None = None) -> str:
                 "Registered is not validated. policies/suites count what is REGISTERED; "
                 "runnablePolicies/runnableSuites exclude the adapters and suites DECLARED as "
                 "scaffolding, which are implemented and unit-tested but have never been run. "
-                "Those two conventions are not interchangeable."
+                "Those two conventions are not interchangeable. realPoliciesTested is a FOURTH "
+                "count and is neither of those: it counts distinct real policies that received at "
+                "least one applicable adversarial episode in a committed run (realPolicyNames says "
+                "which). A scaffolding adapter that has never been run does not count, and a "
+                "registered adapter is not a measured one. A policy is not an architecture, and "
+                "one checkpoint is not a survey: the per-run artifacts say how many seeds, arms "
+                "and tasks each policy actually received. realPolicyDefenses counts defenses with "
+                "a committed defended arm on a real policy (realPolicyDefenseNames says which); a "
+                "defense whose study was measured on the stub fixture is not one of them."
             ),
         },
         indent=2,
@@ -285,7 +428,9 @@ __all__ = [
     "FIXTURE_SUITES",
     "RESULTS_DIR",
     "HARDWARE_DIR_NAME",
+    "RegistryCounts",
     "coverage",
     "coverage_json",
     "coverage_line",
+    "registry_counts",
 ]
