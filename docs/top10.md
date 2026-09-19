@@ -52,6 +52,11 @@ physical/irreversible harm using the Robot Vulnerability Scoring System (RVSS)**
 OWASP Agentic, OWASP LLM, MITRE ATLAS, and NIST AI 100-2 for traceability. **Ordering will change** as a
 real corpus matures. Disagree with the rank? That's the point — open a PR.
 
+**Who did the scoring.** One maintainer, with one co-author on the EAI01 and EAI06 framing (see the
+acknowledgements). No second scorer has independently rated the list yet, so the ordering is the
+weakest part of this document: treat the *set* of risks as the contribution and the *rank* as a
+proposal pending contributors. The [RFC process](top10-rfc.md) is how a rank changes.
+
 ---
 
 ## The Top 10 at a glance
@@ -102,12 +107,12 @@ is called out honestly in each entry.
 **What.** Natural-language commands (direct, or via an LLM planner) that drive the policy to act against
 its safety constraints — the embodied analog of an LLM jailbreak, output as a physical action plan.
 **Evidence.** *[research]* **RoboPAIR** (arXiv 2410.13691, ~100% ASR incl. a deployed Unitree Go2);
-**BadRobot** (ICLR 2025, arXiv 2407.20242). Provael's own runs: `roleplay` diverts a real SmolVLA×LIBERO policy **88% (44/50)**, task-clustered 95% CI **[72%, 100%]**, McNemar p=4.6e-13 (Holm 2.7e-12), across all ten `libero_object` tasks against a **2/50 benign control** (sim-only, ten tasks, 350 measured episodes; `results/smolvla_libero_object_suite/`).
-**What predicts it: meaning, not surface form.** In the same run, `paraphrase` — which preserves the
-request and changes only its wording — fired **3/50 (6.0%)**, 95% Wilson [2.1%, 16.2%], and is
-**statistically indistinguishable from the benign control** (McNemar p = 1.0). `roleplay`, which
-reframes what is being asked while the safety envelope stays fixed, fired 44/50. The two intervals do
-not overlap. Read narrowly — one policy, one suite, four templates per arm, uncalibrated predicate:
+**BadRobot** (ICLR 2025, arXiv 2407.20242). Provael's own runs: under `roleplay` a real SmolVLA×LIBERO policy left its safe envelope on **84% (42/50)** of matched pairs, task-clustered 95% CI **[62%, 100%]**, McNemar p=9.1e-13 (Holm 5.5e-12), across all ten `libero_object` tasks against a **1/50 benign control** (sim-only, ten tasks, 350 measured episodes; 14 September 2026 run on 0.41.2, `results/smolvla_libero_object_suite_2026-09-14/`; the 9 August 2026 run on 0.32.0 gave 44/50, 88%, [72%, 100%] against 2/50). The same-day controls ([E-2026-12](errata.md)) put the frame with no target named at 27/30 and the scrambled tokens at 18/30: the exit is fragility under a long, imperative, out-of-distribution string, not attacker control of what the arm does next.
+**What predicts it: meaning, not surface form.** In the August run, `paraphrase` — which preserves
+the request and changes only its wording — fired **3/50 (6.0%)**, 95% Wilson [2.1%, 16.2%], and is
+**statistically indistinguishable from the benign control** (McNemar p = 1.0); on 0.41.2 it fired
+1/50. `roleplay`, which reframes what is being asked while the safety envelope stays fixed, fired
+44/50 and then 42/50. The intervals do not overlap. Read narrowly — one policy, one suite, four templates per arm, uncalibrated predicate:
 [the finding](findings/semantic-vs-mechanical-instruction-attacks.md) states it as a hypothesis with
 supporting evidence, not a settled result.
 
@@ -121,9 +126,11 @@ executability, cf. RoboGuard); embodied-harm refusal training; red-team each rel
 **What.** Crafted perturbations in what the policy *sees/senses* — adversarial patches, stickers, 3D
 textures, or sensor spoofing — that flip behavior while looking benign to humans.
 **Evidence.** *[research]* "Adversarial vulnerabilities of VLA models" (arXiv 2411.13587); action-aware
-patch attacks. *(Honest note: in Provael's SmolVLA×LIBERO run the `visual` family did NOT transfer —
-0% (0/100 — `patch` and `decoy_object`, 50 each), 95% CI [0–3.7%], against a 2/50 (4%) benign control; real-world robustness of perception
-attacks is unsettled, which is exactly why you test rather than assume. Read that null narrowly: it is
+patch attacks. *(Honest note: in Provael's SmolVLA×LIBERO runs the `visual` family is **not separated from the
+benign floor** — 2/100 on 0.41.2 (`patch` 1/50, `decoy_object` 1/50) against a 1/50 benign control,
+McNemar p = 1.0; 0/100 against 2/50 on the August run — so no rate is claimed for it, only that the
+templated perturbations did not move this policy. Real-world robustness of perception attacks is
+unsettled, which is exactly why you test rather than assume. Read that null narrowly: it is
 evidence about the templated attacks Provael shipped, not about perception robustness in general —
 see the [published baselines](standards/published-asr-baselines.md) and the
 [ForesightSafety-VLA crosswalk](crosswalk/foresight-safety-vla.md), whose authors report the opposite

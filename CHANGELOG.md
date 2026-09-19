@@ -4,9 +4,110 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Recent, in twenty lines.** This file is long because it records reasoning as well as changes;
+the entries below are the ones a reader arriving today needs, newest at the top. Every heading is a
+release the tag exists for; the Unreleased section holds what is merged and not yet cut.
+
+- **0.43.0 (19 Sep 2026)** — a release verdict is made only under a named acceptance protocol
+  (`--protocol`); without one every export says `incomplete — not assessed`. Evidence manifest v2
+  with the coverage counts in one convention (17 families, 39 attacks); π0.5 packaged as measured
+  (preliminary). The fourteen-item correction backlog, worked in order.
+- **0.42.1 / 0.42.0 (18–19 Sep 2026)** — the second architecture: π0.5's preliminary leg on
+  LIBERO-Object (roleplay 1/30 against 0/30, no transfer claimed); the coverage counter counts
+  policies as well as families; `E-2026-12`: the headline is fragility under the roleplay frame,
+  not attacker control — the no-target frame exits at 27/30, the scrambled tokens at 18/30.
+- **0.41.2 (9 Sep 2026)** — the 14 September re-measurement's tool version: roleplay 42/50
+  against 1/50 on all ten Object tasks, inside the August interval; publication freshness as a
+  derivable artifact (`watch/publish-freshness.json`).
+- **Before 0.41** — the ten-task suite result and the sharded GPU runner (0.32), the benign-reword
+  and nonsense controls, signed attestations, the compliance crosswalk, the Top 10, the leaderboard.
+
+Corrections to published numbers live in [docs/errata.md](docs/errata.md), not here; an incident's
+narrative belongs there too, and from 0.44.0 entries say what changed and why, in that order.
+
 ## [Unreleased]
 
-Nothing pending. The next entry opens when a post-0.43.0 change lands.
+Nothing pending. The next entry opens when a post-0.44.0 change lands.
+
+## [0.44.0] — 2026-09-20
+
+The hygiene-and-scope release: the 19 September repository backlog (sections 1, 3, 4 and 5 —
+story, licence hygiene, scope cuts, governance, docs consistency), worked one item per commit in
+its own order and cut as one minor because three behaviours change for a caller: `--recipe
+full-sweep` on a real policy narrows to the measured families, `provael certify` becomes
+`provael dossier` with a deprecated alias, and the compliance rows and the signed regulatory clock
+carry a different framing of the machinery route. **No measured number moves.** The published
+measurement is still the 14 September run on 0.41.2, now three releases behind a window of two:
+`watch/publish-freshness.json` reads `isStale: true`, and the scheduled campaign that would refresh
+it is paused until the predicate is calibrated (#136) — a stale flag that stands is the artifact
+working, and this entry says so rather than arranging for it not to.
+
+### Added
+
+- **NOTICE, SPDX headers, CONTRIBUTORS.md, TRADEMARKS.md, and a DCO check.** The Apache-2.0
+  appendix names the copyright holder; every tracked `.py`/`.sh` under `src/`, `scripts/`,
+  `tests/` and `examples/` carries the two-line SPDX header (`scripts/add_spdx_headers.py`, guarded
+  by `tests/test_spdx_headers.py`); who contributed and under which terms is a file; the mark's
+  status is stated as it is (unregistered, no application filed) with a Mozilla-shaped policy; and
+  the `dco` CI job refuses a pull request with a human commit that lacks `Signed-off-by`
+  (`scripts/check_dco.py`, `make hooks` for the local trailer).
+- **A status per attack family and per suite.** `family_status()` answers `measured` /
+  `fixture-only` / `control` from a declared `MEASURED_FAMILIES` held to the committed runs by
+  test; `suite_status()` answers `measured` / `fixture` / `scaffolding` / `no run committed here`
+  the same way. `list-attacks` and `list-suites` print the column; `docs/attacks.md` carries a
+  generated per-family status table.
+- **`provael dossier`**, the Machinery Regulation evidence dossier; `certify` is a hidden,
+  deprecated alias until 0.46.0.
+- **A tier on every compliance row**: `operative` (Machinery Regulation, ISO 10218:2025,
+  ISO 13849, IEC 61508, IEC 62443) or `reference` (the other ten frameworks), in the emitted
+  compliance report, the dossier and the catalogue the website mirrors.
+- **A Sigstore bundle beside every release asset** (`<asset>.sigstore.json`, cosign keyless through
+  the release workflow's OIDC identity) and the verification recipe in the release notes and
+  SECURITY.md; the build-provenance attestation stays.
+- **`tests/test_workflow_permissions.py`**: no workflow grants a write scope at the top level.
+
+### Changed
+
+- **`--recipe full-sweep` on a real policy runs the families with a committed real-policy
+  measurement by default**; `--include-fixture-families` adds the nine that have only met the CPU
+  fixture. On the fixture nothing is narrowed. An explicit `--attacks` always wins.
+- **The signed regulatory clock states the machinery route after the Digital Omnibus.** Regulation
+  (EU) 2026/1744 moved the Machinery Regulation to AI Act Annex I Section B; Art. 15 does not apply
+  to machinery directly; the AI-specific requirements arrive in Machinery Annex III by delegated act
+  under Art. 8, third paragraph, applying by 2 August 2028, with Art. 20(10)'s presumption of
+  conformity meanwhile. Both clock entries say so (`last_verified` 2026-09-19); the hosted report,
+  the compliance rows, the committed insurer sample, the delivery pack's test report and the docs
+  agree with them. The AI Act entry's date does not move; its meaning does.
+- **The README is 200 lines.** Everything it used to carry moved verbatim, links re-pointed, to
+  the docs page that owns the subject; the guards that read it moved with the sentences.
+- **The measured body leads with the September run everywhere** (README, Top 10 EAI01, the
+  finding, the leaderboard page — which described a board two rebuilds old and is now held to
+  `leaderboard.json` row by row).
+- **The roadmap is the three proofs with dates, and the freeze**: no new families, crosswalks,
+  emitters, recipes or suites until the proofs and a paid engagement; one minor every two to four
+  weeks; integration after the hardware run.
+- **The scheduled GPU campaign is paused** (no `schedule:` trigger; `watch/campaign.json` records
+  `cadence.paused: true`) until the keep-out predicate is calibrated.
+- **The six workflows that write `main` push with the repository's GitHub App token** so `main`
+  can require a pull request and passing checks; absent secrets fail loudly.
+- **GHCR is the only container registry**; the unconfigured Docker Hub mirror is gone.
+- **Least privilege at the top of every workflow**; the one job that uploads SARIF opts in.
+
+### Fixed
+
+- **docs.provael.com served the pre-versioning tree at every cited root URL** (`/errata/` without
+  E-2026-10 to E-2026-14, `/top10/` at 88%), because the root-stub generator never replaced an
+  existing page; it now does, and resolves the retired uppercase URLs in one hop. The docs smoke
+  job had been red on every tag since v0.42.0.
+- **SECURITY.md said CVE-2026-25874 was fixed in LeRobot PR #3048**; the PR is open and no
+  released version carries a fix. The GPU-extras audit names the advisory in an allow-list with
+  the justification.
+- **Stale counts and costs**: `examples/recipes/README.md` ("all 14" of 17 families — the guard now
+  reads through bold and line breaks), the Modal lane's "$0.02/run" (measured ~$0.49),
+  `docs/leaderboard.md`'s 0.1.0 board, the transcript's August download counters.
+- **The AI2 harness premise**: the bridge notes, the scaffolding message and the roadmap said no
+  per-step state reaches a caller; the harness maintainer corrected that on 8 September and the
+  docs had not caught up — the model-server proxy is the supported route.
 
 ## [0.43.0] — 2026-09-19
 
@@ -3697,6 +3798,13 @@ documentation: a defence is a number you can re-derive, not a press release.
 
 No attack, scorer or measured number changed in this release. Two evidence artifacts gained fields:
 `dossier.json` carries four new `standards_crosswalk` rows, and `crosswalk.foresight.json` is new.
+
+### Releases before 0.30.0 follow unchanged
+
+Everything below this line predates the ten-task suite result (0.32.0) and the controls the
+headline is now read against. It is kept verbatim as the record of how the project got here; the
+"Recent" block at the top of this file is the readable entry point, and nothing below it is the
+current claim.
 
 ## [0.29.1] — 2026-07-31
 

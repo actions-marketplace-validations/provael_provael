@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """Run the libero_object suite on a rented Modal GPU, in cost-ordered stages.
 
 WHY THIS EXISTS SEPARATELY FROM modal_provael_gpu.py. That script runs the suite's default task set,
@@ -165,7 +167,7 @@ ATTACKS = "none,instruction,visual,injection"
 #: pushed registry, because the image was rebuilt from a layer that had resolved `@main` weeks
 #: earlier. That failure was loud. The same staleness on a code path that still RUNS is silent,
 #: and is exactly what happened to `calibrate`.
-PROVAEL_PIN = "0.43.0"
+PROVAEL_PIN = "0.44.0"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
 
 

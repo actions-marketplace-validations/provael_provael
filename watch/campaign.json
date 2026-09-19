@@ -7,8 +7,9 @@
   "shardsRemaining": 80
  },
  "cadence": {
-  "cron": "17 4 * * 2,5",
-  "runsPerWeek": 2,
+  "cron": null,
+  "paused": true,
+  "runsPerWeek": 0,
   "shardsPerRun": 5
  },
  "complete": false,
@@ -38,5 +39,5 @@
   "attemptsToDisplace": 656,
   "publishedWith": "0.41.2"
  },
- "toolVersion": "0.43.0"
+ "toolVersion": "0.44.0"
 }

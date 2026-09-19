@@ -61,12 +61,17 @@ forks or reproductions, which are the numbers this project is short of.
 
 ## What the number does and does not explain
 
-At the time of writing this project has **4,667 PyPI downloads** (pypistats, 180-day window, mirrors
-excluded), **5 stars**, **0 forks** and **0 third-party reproductions**.
+When this transcript was written (19 August 2026) the project had a few thousand PyPI downloads,
+single-digit stars, no forks and no third-party reproduction. The numbers are deliberately not
+restated here: a count typed into a page is stale the week after, and this page once carried four
+of them. The measured distribution figures live, dated, on
+[provael.com/adopters](https://provael.com/adopters); the reproduction count lives in the
+[reproduction register](errata.md#reproduction-register), which is the number this project is
+short of.
 
 A 20-second install that reproduces the advertised figure on the first try puts this project in the
-39% that run without modification. Whatever explains 0 forks, it is not the thing this page was
-written to find. The honest conclusion is that **the first run was never the barrier, so improving
+39% that run without modification. Whatever explains the fork count, it is not the thing this page
+was written to find. The honest conclusion is that **the first run was never the barrier, so improving
 it further would buy nothing** — and that a project can be trivially installable and still
 unreproduced, which is a case the census's framework does not distinguish.
 
@@ -91,13 +96,15 @@ reads like a broken package rather than a version floor. Verified by running it.
 states the requirement at the install command.
 
 **2. The README says `libero_object`; the CLI suite is `libero`. Named, not changed.**
-README prose names the measured thing `libero_object` six times, and `--suite libero_object` is not
+README prose named the measured thing `libero_object` six times, and `--suite libero_object` is not
 valid. The failure is well handled — the CLI answers
 `unknown suite 'libero_object'; available: ['humanoid', 'libero', 'metaworld', 'reach', 'stub']`,
 which is a good error — and the correct command is documented in `docs/quickstart.md`,
 `leaderboard/README.md`, `CONTRIBUTING-leaderboard.md` and the results README. Renaming a CLI
 surface or a results directory to close a prose mismatch is a bigger change than this exercise
-justifies, so it is recorded rather than fixed.
+justifies, so it was recorded rather than fixed. *(Closed on 20 September 2026 the other way round:
+the prose now uses the CLI's own names — suite `libero`, tasks `libero_object/<i>` — in the README
+and the quickstart.)*
 
 **3. The real wall is a GPU bill, not a papercut. Not fixable here.**
 See the block above. It is already documented with its exact cost, which is the most that

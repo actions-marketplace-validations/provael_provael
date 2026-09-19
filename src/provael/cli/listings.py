@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """The six `list-*` commands.
 
 They read the registries and print them. Grouped together because they are the same shape and
@@ -10,8 +12,12 @@ from rich.markup import escape
 from rich.table import Table
 
 from provael.attacks.registry import (
+    FAMILY_STATUS_CONTROL,
+    FAMILY_STATUS_FIXTURE_ONLY,
+    FAMILY_STATUS_MEASURED,
     available_attacks,
     available_families,
+    family_status,
     make_attack,
 )
 from provael.cli._shared import _POLICY_STATUS_STYLE, _out, app
@@ -28,11 +34,15 @@ from provael.recipes import RECIPES, available_recipes
 from provael.reproductions import available_reproductions, get_reproduction
 from provael.suites import (
     KIND_FIXTURE,
+    SUITE_STATUS_FIXTURE,
+    SUITE_STATUS_MEASURED,
+    SUITE_STATUS_UNRUN,
     available_suites,
     suite_gating_note,
     suite_is_ready,
     suite_kind,
     suite_scaffolding_note,
+    suite_status,
 )
 from provael.suites import (
     STATUS_SCAFFOLDING as SUITE_STATUS_SCAFFOLDING,
@@ -86,8 +96,13 @@ def list_suites() -> None:
     table = Table(title="Suites")
     table.add_column("name", style="cyan", no_wrap=True)
     table.add_column("ready here", justify="center")
-    table.add_column("kind", no_wrap=True)
-    table.add_column("notes")
+    table.add_column("kind")
+    # `status` answers the evidence question the other columns do not: has a committed run driven
+    # a real policy through this simulator? `libero` and `metaworld` sit behind the same extra and
+    # rendered identically until 20 September 2026; one holds the published body, the other has
+    # never produced a committed episode (and cannot yet complete a CLI run — see its note).
+    table.add_column("status")
+    table.add_column("notes", min_width=24)
     for name in available_suites():
         kind = suite_kind(name)
         fixture = kind == KIND_FIXTURE
@@ -111,13 +126,34 @@ def list_suites() -> None:
             note = f"{note} — {escape(gating)}"
         mark = "[green]yes[/green]" if suite_is_ready(name) else "[yellow]no[/yellow]"
         colour = "yellow" if scaffold is not None else ("cyan" if fixture else "green")
-        table.add_row(name, mark, f"[{colour}]{kind}[/]", note)
+        status = suite_status(name)
+        # The scaffolding label already fills the `kind` column in its long form; the status
+        # column says the one word so the row does not carry the sentence twice.
+        shown = "scaffolding" if status == SUITE_STATUS_SCAFFOLDING else status
+        table.add_row(
+            name, mark, f"[{colour}]{kind}[/]", f"[{_SUITE_STATUS_STYLE[status]}]{shown}[/]", note
+        )
     _out.print(table)
     _out.print(
         "[dim]A CPU fixture is reproducible scaffolding, not evidence about a robot. Only a real "
-        "simulator produces a `real-episode` run.[/dim]"
+        "simulator produces a `real-episode` run; `status` says whether one has been committed "
+        "through this suite.[/dim]"
     )
 
+
+
+_SUITE_STATUS_STYLE: dict[str, str] = {
+    SUITE_STATUS_MEASURED: "green",
+    SUITE_STATUS_FIXTURE: "cyan",
+    SUITE_STATUS_SCAFFOLDING: "yellow",
+    SUITE_STATUS_UNRUN: "yellow",
+}
+
+_FAMILY_STATUS_STYLE: dict[str, str] = {
+    FAMILY_STATUS_MEASURED: "green",
+    FAMILY_STATUS_FIXTURE_ONLY: "yellow",
+    FAMILY_STATUS_CONTROL: "dim",
+}
 
 @app.command("list-attacks")
 def list_attacks() -> None:
@@ -125,10 +161,24 @@ def list_attacks() -> None:
     table = Table(title="Attacks")
     table.add_column("attack", style="cyan", no_wrap=True)
     table.add_column("family", style="magenta")
+    # Per FAMILY, because the evidence is per family: `measured` = a committed run drove this
+    # family against a real policy in a real simulator (the run README carries the rate, which may
+    # be a null); `fixture-only` = only the deterministic CPU fixture has ever seen it, and every
+    # rate it has produced is a property of a fixture written to be attackable; `control` = not
+    # an attack. `full-sweep` on a real policy runs the measured ones by default.
+    table.add_column("status", no_wrap=True)
     for name in available_attacks():
-        table.add_row(name, make_attack(name).family)
+        family = make_attack(name).family
+        status = family_status(family)
+        table.add_row(name, family, f"[{_FAMILY_STATUS_STYLE[status]}]{status}[/]")
     _out.print(table)
     _out.print(f"families: {', '.join(available_families())}")
+    _out.print(
+        "[dim]`status` is per family: measured = a committed real-policy run (rate or null, see "
+        "the run README); fixture-only = only the CPU fixture has ever seen it; control = not an "
+        "attack. `attack --recipe full-sweep` on a real policy runs the measured families unless "
+        "--include-fixture-families is passed.[/dim]"
+    )
 
 
 @app.command("list-recipes")

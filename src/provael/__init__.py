@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """provael (Provael) — red-team open Vision-Language-Action robot policies.
 
 A model-agnostic harness that perturbs the instructions/observations fed to a VLA
@@ -10,7 +12,7 @@ StubSuite. Real VLA policies (e.g. SmolVLA via LeRobot) live behind the optional
 ``provael[lerobot]`` extra and are gated behind ``PROVAEL_INTEGRATION=1``.
 """
 
-__version__ = "0.43.0"
+__version__ = "0.44.0"
 
 # ── The documented public surface ────────────────────────────────────────────
 #

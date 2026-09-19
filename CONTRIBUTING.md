@@ -66,6 +66,21 @@ PROVAEL_INTEGRATION=1 pytest tests/test_lerobot_adapter.py tests/test_libero_ada
   `SuiteAdapter`, new attacks `Attack`; register them in the relevant registry and add a
   CPU test (use the stub) plus a gated test if a GPU/sim is required.
 - Keep optional dependencies imported **only inside methods**, never at module scope.
+- **AI assistance is used and disclosed.** Much of this codebase was written with AI assistance
+  (Claude Code); every published number, calibration and security-relevant path is human-reviewed.
+  Co-author trailers stay in the commit (`git log --grep=Co-Authored-By`). If you use an assistant,
+  keep the trailer and review what it wrote as if a stranger had — the DCO sign-off is yours.
+
+## What is frozen, and why (20 September 2026)
+
+Until the three proofs on the [roadmap](docs/roadmap.md) and a paid engagement exist, **no new
+attack families, crosswalks, output formats, recipes or suites** land — the registry already holds
+more families than have met a real policy, and the compliance layer outruns the measurement. A PR
+that adds one will be closed with a pointer here unless a named prospect asked for it. Reproductions,
+corrections, measurements of what is already registered, and reliability work are the contributions
+that move the project. **Releases** are one minor every two to four weeks with patches only for
+correctness; changelog entries are batched into the minor, and an incident narrative goes to
+`docs/errata.md`, not the changelog.
 
 ## Pull requests
 
@@ -95,9 +110,13 @@ Signed-off-by: Your Name <you@example.com>
 - Forgot the last commit? `git commit --amend -s --no-edit`.
 - A whole branch? `git rebase --signoff main`.
 
-The full certificate text is short — read it at <https://developercertificate.org/>. (If the
-DCO check app is enabled on the repo, PRs with unsigned commits will fail until every commit is
-signed off.)
+The full certificate text is short — read it at <https://developercertificate.org/>.
+
+**CI checks it.** The `dco` job in `.github/workflows/ci.yml` runs `scripts/check_dco.py` over
+every commit in a pull request and fails on any human commit without the trailer (bots are
+exempt). Run `make hooks` once and a local `prepare-commit-msg` hook adds the trailer for you;
+`make check-dco` runs the same check on your branch before you push. Who has contributed, and
+under which terms, is recorded in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 ## Reporting bugs / requesting features
 

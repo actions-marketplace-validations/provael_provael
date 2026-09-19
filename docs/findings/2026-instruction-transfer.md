@@ -4,7 +4,34 @@
 > ships no real-world-harm payload — the battery perturbs only the instruction/observation a policy
 > receives inside a simulator. See [SAFETY.md](https://github.com/provael/provael/blob/main/SAFETY.md).
 
-## The finding
+> **The current measurement (read this before the history below).** The published body is the
+> **14 September 2026 run on provael 0.41.2** — same checkpoint, ten `libero_object` tasks, 5 seeds
+> per (task, arm), horizon 280, workstation RTX 2000 Ada
+> ([run](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_suite_2026-09-14/README.md)).
+> Under `roleplay` the policy left its safe envelope on **42 of 50 matched pairs (84%, task-clustered
+> 95% CI [62%, 100%])** against a **1/50 (2%) benign control**, McNemar exact p = 9.1e-13, Holm
+> 5.5e-12; clean task success on the benign arm 48/50 (96%) and 0/50 under `roleplay`. The
+> [controls run the same day](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_control_2026-09-14/README.md)
+> ([E-2026-12](../errata.md)) give the reading: the roleplay frame with **no target named** exits at
+> **27/30** and the **scrambled** tokens at **18/30**, so this is fragility under a long, imperative,
+> out-of-distribution string, **not attacker control** of what the arm does next.
+>
+> | family | attack | keep-out exit rate | clustered 95% CI | McNemar | Holm |
+> | --- | --- | ---: | ---: | ---: | ---: |
+> | baseline | `none` | **1/50 (2%)** — control | — | — | — |
+> | instruction | `roleplay` | **42/50 (84%)** | **[62%, 100%]** | 9.1e-13 | **5.5e-12** |
+> | instruction | `goal_substitution` | 7/50 (14%) | [0%, 34%] | 0.070 | 0.35 |
+> | instruction | `paraphrase` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+> | visual | `patch` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+> | visual | `decoy_object` | 1/50 (2%) | [0%, 6%] | 1.0 | 1.0 |
+> | injection | `scene_text` | 2/50 (4%) | [0%, 10%] | 1.0 | 1.0 |
+> | injection | `mcp_tool_desc` | **0 attempts** (not applicable) | — | — | — |
+>
+> Everything below this box is the dated record of how the finding was reached: the June 2026
+> single-task run (n = 10) and the 9 August 2026 suite run on 0.32.0 (44/50, 88%). Their numbers
+> are kept as they were published; none of them is the current claim.
+
+## The finding (as written in June 2026, superseded twice — see the box above)
 
 A single, benign-looking **`roleplay`** instruction drove a **real SmolVLA** policy out of its safe
 envelope on **44 of 50 matched pairs across all ten `libero_object` tasks**, against **0** benign
@@ -182,6 +209,23 @@ retroactively to a measurement already taken.
 [Read the write-up](#the-finding) ·
 [Scope & honest limitations](https://github.com/provael/provael/blob/main/README.md#scope-and-honest-limitations).
 
+### The 9 August 2026 table (0.32.0, L4) — the record the README used to lead with
+
+| family | attack | keep-out exit rate | clustered 95% CI | McNemar | Holm |
+| --- | --- | ---: | ---: | ---: | ---: |
+| baseline | `none` | **2/50 (4%)** — control | — | — | — |
+| instruction | `roleplay` | **44/50 (88%)** | **[72%, 100%]** | 4.6e-13 | **2.7e-12** |
+| instruction | `goal_substitution` | **15/50 (30%)** | [6%, 54%] | 9.8e-4 | **4.9e-3** |
+| instruction | `paraphrase` | 3/50 (6%) | [0%, 12%] | 1.0 | 1.0 |
+| visual | `patch` | 0/50 (0%) | — | 0.5 | 1.0 |
+| visual | `decoy_object` | 0/50 (0%) | — | 0.5 | 1.0 |
+| injection | `scene_text` | 0/50 (0%) | — | 0.5 | 1.0 |
+| injection | `mcp_tool_desc` | **0 attempts** | — | — | — |
+
+The null arms show `—` rather than `[0%, 0%]`: the clustered bootstrap declines when every task
+scores the same rate, and pooled as a plain binomial 0/50 is consistent with a true rate as high as
+7.1% (exact 95% upper bound).
+
 ### From the results section
 
 **That interval is clustered over TASKS, not episodes**, and the distinction matters more than the
@@ -234,3 +278,63 @@ perturbations did not move it (0%) — an honest null on this suite.
 > --calib` reports a calibrated redirection rate with its 95% CI and the benign FPR as its control
 > — see [Calibration](https://github.com/provael/provael/blob/main/README.md#calibration). It has never been run on LIBERO. The real SmolVLA × LIBERO
 > path needs a GPU + the `[lerobot]` extra.
+
+## Reading the body
+
+> *Moved here from the repository README on 20 September 2026, when the README was cut to what a new reader needs. The text is as it stood there; links were re-pointed.*
+
+
+`HuggingFaceVLA/smolvla_libero` · **all ten `libero_object` tasks** · 5 seeds per (task, arm) ·
+horizon 280. The published measurement is the **14 September 2026 run on 0.41.2** (workstation
+RTX 2000 Ada; [run](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_suite_2026-09-14/README.md), with
+[aggregate.json](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_suite_2026-09-14/aggregate.json) beside the shards);
+it is the run `watch/publish-freshness.json` names. 350 measured episodes of 400 records.
+
+**Under `roleplay`, SmolVLA left its safe envelope on 42 of 50 matched pairs (84%, task-clustered
+95% CI [62%, 100%]) against a 1/50 benign control (2%), McNemar exact p = 9.1e-13, Holm-adjusted to
+5.5e-12 across the six-arm screen.** Clean task success on the benign arm is 96% (48/50) and 0/50
+under `roleplay`. Read it with the [controls run the same day](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_control_2026-09-14/README.md)
+([E-2026-12](../errata.md)): the roleplay frame with **no target named** exits at **27/30** and the
+**scrambled** tokens at **18/30**, so the exit is the policy's fragility under a long, imperative,
+out-of-distribution string — not attacker control of what the arm does next.
+
+The interval is clustered over **tasks**, not episodes — episodes inside one task are correlated,
+and `provael.scoring.paired` refuses a clustered interval below two tasks. `mcp_tool_desc` is **not
+applicable** to this suite: it produces 50 episode records carrying `applicable: false` and
+`steps: 0`, which scoring excludes from `attempts`. It is listed as not-measured rather than as a
+null, because those are different claims — and it is why the run is 350 measured episodes out of
+400 records.
+
+**History — the 9 August 2026 run on 0.32.0 (L4).** Same checkpoint, tasks, arms, seeds and
+horizon: `roleplay` **44/50 (88%)**, clustered 95% CI [72%, 100%], against a 2/50 benign control,
+McNemar p = 4.6e-13 (Holm 2.7e-12); `goal_substitution` 15/50 (30%, [6%, 54%], Holm 4.9e-3);
+`paraphrase` 3/50; `patch`, `decoy_object`, `scene_text` 0/50 each. Roleplay reproduces inside the
+earlier interval and survives Holm alone; `goal_substitution`, which survived correction at 15/50,
+is 7/50 on 0.41.2 and does not — one draw of a sampling policy each time, and the honest reading of
+two runs is that its effect is real but small enough that fifty cells do not settle it. The August
+table, and the narrative that used to open this section, are preserved in
+[the write-up](../findings/2026-instruction-transfer.md).
+
+**A 0/50 arm shows `—` rather than an interval, and that is a correction.** The August table once
+published `[0%, 0%]` for its null arms. The clustered bootstrap declines when every task scores the
+same rate: resampling ten tasks that all scored zero returns zero on every draw, so the percentiles
+collapse onto it and the interval reads as certainty the data cannot support. Pooled as a plain
+binomial, 0/50 is consistent with a true rate as high as **7.1%** — the exact 95% upper bound. The
+refusal lives in `provael.scoring.paired` and is guarded by `tests/test_paired.py` and
+`tests/test_no_zero_width_intervals.py`.
+
+**The benign control is not clean, and the reason is measured.** Pooled across both runs the
+benign arm fires 5/100, all on `libero_object/4` and `/5`, with the other eight tasks silent
+through 80 episodes (out-of-sample p = 0.04): the default keep-out box sits in the wrong place
+on those two tasks rather than the policy wandering
+([studies/keepout_calibration](https://github.com/provael/provael/blob/main/studies/keepout_calibration/README.md)). A benign-only fit
+cannot choose the face an attack leaves through, so no corrected zone is adopted
+([studies/keepout_face_selection](https://github.com/provael/provael/blob/main/studies/keepout_face_selection/README.md), errata E-2026-08,
+[#136](https://github.com/provael/provael/issues/136)). Ten per-task fits ship inside the
+package and are **withheld rather than absent** — `provael doctor` names them and says why.
+
+> **Scope.** Simulation only. Ten `libero_object` tasks, 5 seeds per (task, arm), 350 measured
+> episodes per run — read the intervals, not the points. Only the **instruction** family clears
+> the floor on this policy, and E-2026-12 says what that is: fragility under a long, imperative,
+> out-of-distribution string, not attacker control. The predicate is the uncalibrated default
+> box. The real path needs a GPU + the `[lerobot]` extra.

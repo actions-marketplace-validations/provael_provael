@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """The published board must state which tool version measured it, and that claim is checked.
 
 THE GAP THIS CLOSES. `leaderboard.json` carries `measured_with`, and nothing verified it against
@@ -163,7 +165,9 @@ def test_the_readme_states_the_version_the_board_was_actually_measured_with() ->
     measured_with = board.get("measured_with") or []
     assert measured_with, "the board carries no measured_with to check the README against"
 
-    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+    # The board prose moved from README.md to docs/leaderboard.md with the 200-line README cut
+    # (20 September 2026); the claim and its guard moved together.
+    readme = (_ROOT / "docs" / "leaderboard.md").read_text(encoding="utf-8")
     stated = re.search(
         r"published board does not cover.*?measured with\s*\n?\*\*`provael ([0-9][^`]*)`\*\*",
         readme,
@@ -195,3 +199,23 @@ def test_the_rebuild_workflow_is_dispatch_only_and_verifies_against_the_publishe
     assert '--real "${RUN}"' in text, "the board must be built from the dispatched run, not a typed path"
     assert "leaderboard/results/source.json" in text, "a rebuild must rewrite the source pointer"
     assert "[skip ci]" not in text and "skip-checks" not in text
+
+
+def test_the_docs_page_states_every_board_row_as_the_board_carries_it() -> None:
+    """docs/leaderboard.md prints each family row as `successes/attempts`; the board is the source.
+
+    Until 20 September 2026 the page described the June 2026 single-task board — roleplay 100%,
+    visual and injection 0%, "measured with 0.1.0", "the other twelve" families — two rebuilds
+    after those rows were replaced. The version sentence was guarded above; the rows were not. A
+    page that restates a signed artifact restates all of it or none of it.
+    """
+    board = json.loads(_BOARD.read_text(encoding="utf-8"))
+    page = (_ROOT / "docs" / "leaderboard.md").read_text(encoding="utf-8")
+    for row in board["rows"]:
+        fraction = f"{row['successes']}/{row['attempts']}"
+        assert fraction in page, (
+            f"docs/leaderboard.md does not state the board's `{row['family']}` row as {fraction}; "
+            "the board was rebuilt and the page was not"
+        )
+    for absent in ("62/150", "roleplay 100%", "measured with **0.1.0**. Every row"):
+        assert absent not in page, f"docs/leaderboard.md still carries the superseded figure {absent!r}"

@@ -95,12 +95,20 @@ Factual application dates, carried so the evidence is legible against the calend
 about. Dates only — no claim of conformity:
 
 - **EU Machinery Regulation (EU) 2023/1230** — applies **20 January 2027**. AI-enabled safety
-  functions need a cyber-risk assessment against corruption; this is the operative route for
-  AI-enabled robots.
-- **EU AI Act (EU) 2024/1689, Annex I machinery** — high-risk obligations were statutory from
-  **2 August 2027**. Regulation (EU) 2026/1744 (Digital Omnibus on AI), in the OJ on
-  **24 July 2026** and in force **27 July 2026**, moved embedded Annex I application to
-  **2 August 2028** — the operative date. Plan against 2028; 2027 is the superseded baseline.
+  functions need a cyber-risk assessment against corruption (Annex III 1.1.9 and 1.2.1); this is
+  the operative route for AI-enabled robots. Regulation (EU) 2026/1744 inserted Art. 8, third
+  paragraph: the Commission adds AI-specific health and safety requirements to Annex III by
+  delegated act, reflecting AI Act Chapter III Section 2 and Arts 17/19/72/73, **applying by
+  2 August 2028**; until then Art. 20(10) presumes conformity through the AI Act's harmonised
+  standards.
+- **EU AI Act (EU) 2024/1689, as amended by Regulation (EU) 2026/1744** — for machinery the AI
+  Act's Chapter III, Art. 15 included, does **not** apply directly: the Omnibus (OJ 24 July 2026,
+  in force 27 July 2026) moved the Machinery Regulation to Annex I **Section B**, and the
+  AI-specific requirements reach a robot through the Machinery Regulation route above, by
+  **2 August 2028**. Art. 15 applies directly to Annex I Section A products from 2 August 2028
+  and to stand-alone Annex III systems from 2 December 2027; the statutory 2 August 2027 is
+  superseded. Art. 15's robustness and cybersecurity language remains the measurement anchor the
+  Machinery-side requirements are to reflect.
 - **ISO 10218-1/-2:2025** — in force since 2025; the revision adds cybersecurity requirements for
   industrial robots, feeding the Machinery Regulation cyber-risk assessment.
 - **NIST AI 100-2e2025** — adversarial-ML taxonomy; guidance, not a compliance deadline.
@@ -164,3 +172,48 @@ paid surface. The open tool never gates the local stub path.
 
 *Independent · not legal advice · evidence, not certification. See [compliance](compliance/index.md)
 for the full crosswalk.*
+
+## `provael attest`, as the README described it
+
+> *Moved here from the repository README on 20 September 2026, when the README was cut to what a new reader needs. The text is as it stood there; links were re-pointed.*
+
+
+`attest` wraps that **same** compliance evidence into a **tamper-evident, dated, offline-verifiable
+bundle** — the artifact an auditor or insurer keeps on file. It binds the run with a SHA-256 digest,
+stamps a UTC date + the crosswalk ruleset + the source commit, records a per-attack transfer-test
+status, and wraps it in a DSSE-style envelope:
+
+```bash
+uv run provael attest --policy stub --suite stub --out runs/attest   # issue a bundle + public key
+# Verification is FAIL-CLOSED. Integrity-only grades just the digest layer:
+uv run provael attest --verify runs/attest/attestation.json --integrity-only
+# Strict verification needs a trust store — a valid signature from an unknown key is UNTRUSTED:
+uv run provael attest --verify runs/attest/attestation.json --trust-store trust.json
+```
+
+Verification names the exact property it establishes: an unsigned bundle, or a valid signature from
+a key that is not in *your* trust store, is **never** reported as "verified" — integrity, signature
+validity, and signer trust are distinct. The digest layer is standard-library and always on.
+Cryptographic **Ed25519 signing** rides the optional `provael[attest]` extra (`--no-sign` gives a
+digest-only bundle without it). It re-runs nothing and is **evidence, not certification** — see
+[docs/attestation.md](https://github.com/provael/provael/blob/main/docs/attestation.md).
+
+`--profile <iso-10218-2|iec-62443|insurer>` embeds a **standards-aligned assurance view**: the per-EAI
+ASR as **ISO 10218-2:2025** cyber-risk-assessment evidence routed to **IEC 62443 SL2**, or a
+structured **assurance-report draft** (an evidence export for a qualified assessor, *not* an insurer
+or conformity-assessment opinion) with the honest *which-families-transfer-on-the-real-model* table
+(ASR + 95% Wilson CI + benign-FPR + the `evidence_state` ladder + `measured-real-transfer` vs
+`stub-validated-scaffolding`), plus a
+third-party cert-readiness cross-reference (NVIDIA Halos / UL 4600 / ISO 21448 / ISO/PAS 8800). A
+worked example over the real SmolVLA×LIBERO run is committed at
+[`results/smolvla_libero_object/attestation.insurer.json`](https://github.com/provael/provael/blob/main/results/smolvla_libero_object/attestation.insurer.json).
+
+```bash
+uv run provael attest --run results/smolvla_libero_object --profile insurer --out runs/attest
+```
+
+> **Open-core.** The CLI, attacks, calibrated ASR, SARIF, the GitHub Action and local `attest`
+> (including the `--profile` assurance views) are free and Apache-2.0. A **future operated service**
+> (an authenticated, KMS-backed signing service with a trusted key) is the intended paid surface; the
+> in-repo hosted server is an **experimental reference**, disabled by default, that signs only with
+> the operator's own (untrusted-by-default) key. The open tool never gates the local stub path.

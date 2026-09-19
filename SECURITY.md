@@ -95,6 +95,26 @@ We are not your CSIRT and cannot report on your behalf. The notification duty is
   simulator are isolated behind the optional `[lerobot]` extra and a `PROVAEL_INTEGRATION=1`
   gate. Releases publish to PyPI via OIDC trusted publishing (no stored tokens).
 
+### Verifying a release
+
+From 0.44.0 every GitHub Release asset (wheel, sdist, CycloneDX SBOM, `SHA256SUMS`) ships with a
+Sigstore bundle beside it, `<asset>.sigstore.json`, signed keyless by `release.yml` through the
+repository's OIDC identity, and with a SLSA build-provenance attestation in GitHub's store. PyPI
+carries PEP 740 attestations for the wheel and sdist. Any of the three names the workflow, the tag
+and the commit that built the file:
+
+```bash
+cosign verify-blob --bundle provael-X.Y.Z-py3-none-any.whl.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/provael/provael/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  provael-X.Y.Z-py3-none-any.whl
+gh attestation verify provael-X.Y.Z-py3-none-any.whl --repo provael/provael
+```
+
+Releases 0.42.0 to 0.43.0 carry the build-provenance attestation and the PyPI attestations but
+no bundle beside the asset; `gh attestation verify` works for them. Earlier releases carry the PyPI
+attestations only.
+
 ### Network egress, by path
 
 Three paths, three different answers; stating them together is what stops the CPU claim being read
@@ -125,14 +145,18 @@ vulnerabilities in Provael**, and the core install (6 deps, no GPU/ML stack) is 
   endpoint** — it uses LeRobot only for **in-process** policy loading and the LIBERO simulator,
   behind the `[lerobot]` extra and the `PROVAEL_INTEGRATION=1` gate. So the vulnerable code path is
   not reachable through Provael, on CPU or GPU. If you **separately** run LeRobot's async inference,
-  follow the upstream advisory (fixed in LeRobot PR #3048, which replaces pickle with
-  safetensors + JSON) — require auth/mTLS on the PolicyServer and upgrade once a fixed release is
-  verified against the `smolvla_libero` path. **Pinning Provael's extra to that fixed release is a
-  bounded, explicit exception, not a forgotten one:** the pin stays at `0.5.1` until a fixed
-  release has been validated against the supported checkpoint on a GPU (the adapter's per-step
-  rollout was read off this version's evaluator, and 0.6.x moved import paths and raised the torch
-  floor — `pyproject.toml` records why), and it moves by a validated run, never by a version-string
-  edit. Enabling LeRobot's separate inference server is not a shortcut to that and is not done.
+  require auth/mTLS on the PolicyServer. **No released LeRobot carries a fix as of 19 September
+  2026:** a fix is *proposed* in [LeRobot PR #3048](https://github.com/huggingface/lerobot/pull/3048)
+  (replacing pickle with safetensors + JSON), which is still open, and the advisory
+  ([GHSA-f7vj-73pm-m822](https://github.com/advisories/GHSA-f7vj-73pm-m822)) lists no patched
+  version — this note used to say "fixed in PR #3048", which overstated it. **The pin is a bounded,
+  explicit exception, not a forgotten one:** it stays at `0.5.1` until a release that carries the
+  fix has been validated against the supported checkpoint on a GPU (the adapter's per-step rollout
+  was read off this version's evaluator, and 0.6.x moved import paths and raised the torch floor —
+  `pyproject.toml` records why), and it moves by a validated run, never by a version-string edit.
+  CI's dependency audit of the GPU extras names this advisory in an `--ignore-vuln` allow-list with
+  this justification (`.github/workflows/ci.yml`), so the audit stays legible for anything new.
+  Enabling LeRobot's separate inference server is not a shortcut to that and is not done.
 
 ## Scope under the EU Cyber Resilience Act
 

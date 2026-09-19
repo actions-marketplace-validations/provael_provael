@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """The scheduled real-model lane: the next shards of a declared campaign, on Modal L4s.
 
 Provael's core is CPU-tested in CI; the headline credibility move is a cheap, *real-model* job.
@@ -138,8 +140,11 @@ REPOSITORY = "provael/provael"
 #: the next day, before any shard had run at 0.42.0, so the campaign directory names the release
 #: the containers actually install; and to 0.43.0 on 19 September 2026, again before any shard had
 #: run (0/80 banked), so the lane records under the release that decides under a named protocol
-#: and carries the corrected counts.
-PROVAEL_PIN = "0.43.0"
+#: and carries the corrected counts; and to 0.44.0 on 20 September 2026, with the lane PAUSED
+#: (no schedule until the predicate is calibrated, #136) and still 0/80 banked, so that when it
+#: resumes it records under the release whose full-sweep default and family statuses match what
+#: it measures.
+PROVAEL_PIN = "0.44.0"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
 
 # --------------------------------------------------------------------------- #

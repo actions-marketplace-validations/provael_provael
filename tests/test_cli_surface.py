@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """`provael --help` is a published surface, and a refactor must not move it.
 
 WHY THIS EXISTS. Issue #193 asks for `src/provael/cli.py` — three thousand lines and 27 top-level
@@ -80,7 +82,8 @@ def test_command_order_is_preserved_verbatim() -> None:
         "version", "crosswalk",
         "list-policies", "list-suites", "list-attacks", "list-recipes", "list-reproductions",
         "list-defenses",
-        "attack", "reproduce", "report", "transfer-test", "export", "compose-video", "certify",
+        "attack", "reproduce", "report", "transfer-test", "export", "compose-video", "dossier",
+        "certify",  # hidden, deprecated alias of dossier until 0.46.0 (20 Sep 2026)
         "serve",
         "evidence-manifest", "attest", "calibrate", "workspace-bounds", "coverage", "watch",
         "offline-study", "sim-to-real", "submit", "verify-checkpoint", "mitigation", "doctor",

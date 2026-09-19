@@ -30,7 +30,11 @@ framework asks for, and specs the report Provael generates from them.
 > **Article 15** robustness/cybersecurity language remains the substantive *measurement* anchor
 > (and still applies directly to non-machinery high-risk AI systems); for a robot, treat the
 > Machinery Regulation + ISO 10218:2025 cyber-risk assessment as the *operative route* and Art. 15
-> as the methodology it pulls in. Dates/routing are *indicative* — confirm against the final OJ text.
+> as the methodology it pulls in. Confirmed on 19 September 2026 against the consolidated Machinery
+> Regulation (CELEX 02023R1230-20260727): the route is **Art. 8, third paragraph** (delegated acts
+> adding AI requirements to Annex III, applying by 2 August 2028) and **Art. 20(10)** (presumption of
+> conformity via AI Act harmonised standards meanwhile); the Machinery Regulation sits in AI Act
+> Annex I **Section B** (Reg. 2026/1744, point (41)(b)). Not legal advice; the primary text governs.
 
 ---
 
@@ -58,6 +62,20 @@ These are *behavioural-susceptibility* measurements via templated attacks — no
 certified bounds. See [Honest scope](#honest-scope-what-this-does-not-cover).
 
 ---
+
+## Two tiers: operative and reference (20 September 2026)
+
+Every row below, and every row `provael report --format compliance` emits, carries a `tier`.
+**Operative** is the route a machinery assessor reads this evidence through, and the one this
+project develops: the **Machinery Regulation 2023/1230**, **ISO 10218:2025**, and the three
+implemented safety/security standards asked for beside it — **ISO 13849**, **IEC 61508**,
+**IEC 62443**. **Reference** is every other mapping on this page: the EU AI Act rows (see the
+routing note above), the CRA, NIST, ISO/IEC 42001, 23894 and TR 5469, ISO 25785-1, the Korea AI
+Framework Act, UN R155 and ISO/SAE 21434 — kept, emitted and checked, but reference material,
+not developed further until the three proofs on the [roadmap](../roadmap.md) and a paid
+engagement exist. ISO 12100 (risk assessment) and ISO/IEC TS 22440 (draft) belong to the
+operative conversation and are cited on the Machinery pages; neither is implemented, and the tier
+is not a licence to add rows.
 
 ## Crosswalk — Provael evidence → frameworks
 
@@ -230,3 +248,33 @@ See also [top10](../top10.md) (the risk taxonomy + OWASP/MITRE crosswalk) and
 
 *Independent · not legal advice · evidence, not certification. PRs and corrections welcome via
 the [Top 10 issue form](https://github.com/provael/provael/issues/new?template=top10-feedback.yml).*
+
+## From a run to the evidence artifact
+
+> *Moved here from the repository README on 20 September 2026, when the README was cut to what a new reader needs. The text is as it stood there; links were re-pointed.*
+
+
+Turn a run into an **auditor-readable evidence artifact** — it maps the measured signals (the
+redirection rate + 95% CI under the run's predicate, which every row names; the benign-FPR
+control; the EAI risks covered; the calibration metadata where a calibration ran; the release
+decision under its named protocol) onto **EU AI Act** (Art. 9 / 15 / 72), **ISO 10218-1/-2:2025**
+(cyber), **NIST AI 100-2 / AI RMF**, and **IEC 62443**:
+
+```bash
+uv run provael report --in runs/calib --format compliance --out report.compliance.json  # evidence JSON
+uv run provael report --in runs/calib --format compliance --out report.compliance.md    # auditor-readable
+```
+
+Each mapped requirement carries the Provael artifacts that evidence it, an `evidence-present` /
+`gap` status (with a reason — e.g. an uncalibrated run flags the metrics that need calibration as
+gaps), and the honest-scope caveats. It reuses `report.json` (no attacks re-run) and is
+**evidence, not certification** — see
+[docs/compliance/index.md](https://github.com/provael/provael/blob/main/docs/compliance/index.md) for the full
+crosswalk and schema.
+
+For an assessor-facing pack, `provael dossier` emits an EU Machinery Regulation Annex I Part A (or
+`--profile annex-iii`) conformity-assessment evidence dossier — per-family ASR with both intervals,
+an honest per-family real-policy transfer statement, a residual-risk statement, a clause crosswalk,
+and references to the ML-BOM + attestation — as OSCAL plus a single print-to-PDF HTML; it is
+evidence input to a conformity assessment, not certification (see
+[docs/compliance/machinery-annex-i-part-a.md](https://github.com/provael/provael/blob/main/docs/compliance/machinery-annex-i-part-a.md)).

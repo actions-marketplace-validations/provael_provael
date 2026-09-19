@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Sattyam Jain
 """Simulation suites and a small name -> suite factory.
 
 The ``stub`` suite is always available (pure CPU, no deps). The ``libero`` suite wraps
@@ -77,8 +79,10 @@ SUITES: dict[str, Callable[[], SuiteAdapter]] = {
 #: so a probe answers differently in a checkout and in a wheel, and it fails toward "measured".
 SCAFFOLDING_SUITES: dict[str, str] = {
     "ai2_bridge": (
-        "scaffolding: the AI2 harness returns per-episode success only — no per-step state for "
-        "is_unsafe() and no end-effector pose reaches a caller; no benchmark has been run here"
+        "scaffolding: written against an earlier reading of the AI2 harness; the harness does send "
+        "the end-effector state to the model-server side (send_state) and exposes StepRecorder as "
+        "the hook for a second writer (allenai/vla-evaluation-harness#127), so the supported route "
+        "is a model-server proxy, not this adapter; no benchmark has been run here"
     ),
     "vla_arena": (
         "scaffolding: adapter written against VLA-Arena's source (declared per-step cost "
@@ -110,6 +114,52 @@ def suite_gating_note(name: str) -> str | None:
 #: Status label rendered for a scaffolded suite. Kept as a constant so the CLI, the tests and any
 #: future emitter say the same words, exactly as ``STATUS_SCAFFOLDING`` does for policies.
 STATUS_SCAFFOLDING = "scaffolding — no benchmark ever run"
+
+#: suite name -> the committed evidence that a real policy has been driven through it in a real
+#: simulator. **Declared, never probed** — the same contract as
+#: :data:`~provael.policies.registry.MEASURED_POLICIES` and for the same reason (``results/`` is
+#: not packaged). ``tests/test_backend_labels.py`` holds the keys to ``coverage().real_suite_names``
+#: in a checkout, so a suite cannot read ``measured`` without a committed applicable adversarial
+#: episode, and a committed one cannot go unlisted. Meta-World is deliberately absent: its adapter
+#: is implemented and unit-tested, its simulator wiring has never been introspected against an
+#: installed package, and no run has been committed — it is ``no run committed here`` until one is.
+MEASURED_SUITES: dict[str, str] = {
+    "libero": (
+        "SmolVLA x LIBERO-Object, ten tasks (results/smolvla_libero_object_suite_2026-09-14, the "
+        "published body) and pi05's preliminary leg (results/pi05_libero_object_2026-09-18)"
+    ),
+}
+
+#: The four answers :func:`suite_status` gives, mirroring the policy side word for word so the two
+#: ``list-*`` tables read the same way: a real simulator with a committed real-policy run; a
+#: deterministic CPU fixture; declared scaffolding; a real simulator nobody has driven a committed
+#: run through here.
+SUITE_STATUS_MEASURED = "measured"
+SUITE_STATUS_FIXTURE = "fixture"
+SUITE_STATUS_UNRUN = "no run committed here"
+
+
+def suite_status(name: str) -> str:
+    """How much is known about ``name``: measured, fixture, scaffolding, or never run here.
+
+    Answers a different question from :func:`suite_is_ready` (does the dependency import on this
+    machine) and from :func:`suite_gating_note` (can the CLI complete a run): this one is about the
+    EVIDENCE. ``libero`` and ``metaworld`` are both real simulators behind the same extra, and until
+    20 September 2026 ``list-suites`` rendered them identically — one holds the published body, the
+    other has never produced a committed episode.
+
+    Raises:
+        KeyError: if ``name`` is not a registered suite.
+    """
+    if name not in SUITES:
+        raise KeyError(f"unknown suite {name!r}; available: {available_suites()}")
+    if name in SCAFFOLDING_SUITES:
+        return STATUS_SCAFFOLDING
+    if name in MEASURED_SUITES:
+        return SUITE_STATUS_MEASURED
+    if name in FIXTURE_SUITES:
+        return SUITE_STATUS_FIXTURE
+    return SUITE_STATUS_UNRUN
 
 #: Suites that require the optional ``[lerobot]`` extra (and a real simulator). ``vla_arena``
 #: needs it too — its policy path is lerobot's LIBERO processors — on top of VLA-Arena itself.
@@ -203,9 +253,14 @@ def make_suite(name: str, *, tasks: Sequence[str] | None = None) -> SuiteAdapter
 
 
 __all__ = [
+    "MEASURED_SUITES",
     "SUITES",
     "SCAFFOLDING_SUITES",
     "STATUS_SCAFFOLDING",
+    "SUITE_STATUS_FIXTURE",
+    "SUITE_STATUS_MEASURED",
+    "SUITE_STATUS_UNRUN",
+    "suite_status",
     "suite_scaffolding_note",
     "SUITE_GATING_NOTES",
     "suite_gating_note",

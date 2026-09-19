@@ -22,7 +22,7 @@ gRPC endpoint (TCP/50051).
 **Provael never starts that PolicyServer or any gRPC endpoint** — it uses LeRobot only for
 in-process policy loading and the LIBERO simulator, behind the `[lerobot]` extra and the
 `PROVAEL_INTEGRATION=1` gate, so that specific code path is not reachable through Provael. The
-upstream fix is LeRobot PR #3048, which replaces pickle with safetensors + JSON.
+proposed upstream fix is LeRobot PR #3048, which replaces pickle with safetensors + JSON — still open as of 19 September 2026, with no released version carrying it (see [SECURITY.md](https://github.com/provael/provael/blob/main/SECURITY.md)).
 
 The *class* of risk is broader than the one CVE, though, and it does reach us: **loading a pickle
 executes it.** Any tool that fetches a third-party checkpoint and loads it is running the
@@ -75,7 +75,7 @@ In the Action, the step runs **before** the policy is instantiated — the check
 the load:
 
 ```yaml
-- uses: provael/provael@v0.43.0
+- uses: provael/provael@v0.44.0
   with:
     policy: smolvla
     suite: libero
