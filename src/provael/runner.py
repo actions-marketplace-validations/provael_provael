@@ -29,10 +29,11 @@ from provael.attacks.gradient_patch import GradientOracleAttack
 from provael.attacks.optimized import OracleAttack, SchemaAwareAttack, ZoneAwareAttack
 from provael.attacks.registry import resolve_attacks
 from provael.attacks.weight_integrity import SensitivityReferencePolicy, WeightIntegrityAttack
-from provael.calibration import Calibration, anytime_ci, wilson_ci
+from provael.calibration import Calibration, anytime_ci, binding_status, wilson_ci
 from provael.config import RunConfig
 from provael.defenses.base import Defense
 from provael.defenses.registry import make_defense
+from provael.endpoints import PHYSICAL_HAZARD
 from provael.evidence import classify_run
 from provael.ledger import TrialKey, append_trial, completed_keys, record_of, results_for
 from provael.policies.base import InputGradientProvider, PolicyAdapter
@@ -225,6 +226,7 @@ def run_episode(
     threshold = 0.0
     steps = 0
     task_success: bool | None = None  # C2: only set if the suite surfaces a task-success signal
+    hazard: bool | None = None  # the second predicate: only set if the suite surfaces contact/force
     decisions: list[Decision] = []
     # Per-step calibration signal, recorded for EVERY episode. Gated on nothing by design: the
     # input to a keep-out calibration was previously computed and discarded on every run, which is
@@ -303,6 +305,16 @@ def run_episode(
             # surfaces none keeps the honest None rather than a fabricated False.
             task_success = bool(task_success) or bool(step_task_success)
 
+        # The SECOND predicate, read from the suite's own contact / force signals and latched the
+        # same way as task success: one event anywhere in the episode is an event. Only ever set
+        # from a non-None step answer — a suite without a contact API leaves it None (N/A), and the
+        # result then carries no `physical_hazard` key at all rather than a fabricated False. It
+        # is scored on the executed steps: an episode the envelope check stops early is not
+        # observed after that step, which the endpoint definition says.
+        step_hazard = suite.physical_hazard(state)
+        if step_hazard is not None:
+            hazard = bool(hazard) or bool(step_hazard)
+
         # Read BEFORE the unsafe check breaks the loop: the step that violates the envelope is the
         # most informative one in the trajectory, and a `break` placed above this would drop
         # precisely that sample on every successful attack.
@@ -348,6 +360,8 @@ def run_episode(
         original_instruction=base_instruction,
         adversarial_instruction=adversarial_instruction,
         task_success=task_success,
+        # N/A is absent, never False: only a suite that surfaced a signal writes the key.
+        endpoints={PHYSICAL_HAZARD: hazard} if hazard is not None else {},
         attacker_access=attack.attacker_access,
         action_head_class=policy.action_head_class or attack.action_head_class,
         decisions=decisions,
@@ -532,6 +546,13 @@ def run(
                     target_fpr=cal.target_fpr,
                     holdout_fpr=cal.benign_fpr,
                     n_benign=cal.n_benign,
+                    split=cal.split,
+                    eval_fpr=cal.eval_fpr,
+                    # Derived against THIS run — the artifact cannot know what it is applied to.
+                    binding=binding_status(
+                        cal, policy=config.policy, suite=config.suite, task=task,
+                        model=config.model,
+                    ),
                 )
     # The benign baseline's rate under the predicate actually used IS the live benign FPR.
     baseline = attack_breakdown.get("none")
@@ -552,7 +573,10 @@ def run(
         # rather than signed over, and the corruption parameters would sit outside the
         # signature that is supposed to cover them. 6: the report carries `deployed_policy`,
         # the executed policy as the adapter resolved it (issue #227); same rule, same reason.
-        schema_version=6,
+        # 7: `calibration.<task>` carries `split` / `eval_fpr` / `binding`, so a bound predicate
+        # and a tuned one are signed over as different things (nested, so the projection strips
+        # them for a report that declares less — see attest._CALIBRATION_META_FIELDS_ADDED_IN).
+        schema_version=7,
         evidence_state=classify_run(config.policy, config.suite).value,
         policy=config.policy,
         model=config.model,
