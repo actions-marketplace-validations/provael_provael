@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 the entries below are the ones a reader arriving today needs, newest at the top. Every heading is a
 release the tag exists for; the Unreleased section holds what is merged and not yet cut.
 
+- **0.46.0 (21 Oct 2026)** — hygiene, `pillow>=13.0` for nine advisories, and significance tested
+  against the control arm's own counts (E-2026-18; 21 of the 49 ✅ rows were not). No headline number
+  moves; the published measurement (0.41.2, uncalibrated) is five minor releases behind.
 - **0.45.0 (28 Sep 2026)** — attestation v2: bundles bind `report.json`'s bytes and sign a 306-byte
   record a KMS key can sign (0.44 cannot verify v2; v1 still verifies); three-way calibration
   (schema 7); a contact/force predicate (unmeasured); the ML-BOM names the policy; Meta-World is
@@ -18,18 +21,31 @@ release the tag exists for; the Unreleased section holds what is merged and not 
   (`--protocol`); without one every export says `incomplete — not assessed`. Evidence manifest v2
   with the coverage counts in one convention (17 families, 39 attacks); π0.5 packaged as measured
   (preliminary). The fourteen-item correction backlog, worked in order.
-- **0.42.1 / 0.42.0 (18–19 Sep 2026)** — the second architecture: π0.5's preliminary leg on
-  LIBERO-Object (roleplay 1/30 against 0/30, no transfer claimed); the coverage counter counts
-  policies as well as families; `E-2026-12`: the headline is fragility under the roleplay frame,
-  not attacker control — the no-target frame exits at 27/30, the scrambled tokens at 18/30.
-- **Before 0.42** — 0.41.2 (9 Sep 2026), the 14 September re-measurement's tool: roleplay 42/50
-  against 1/50 on all ten Object tasks, and publication freshness as an artifact; the ten-task suite
-  and sharded GPU runner (0.32), the controls, signed attestations, crosswalk, Top 10, leaderboard.
+- **Before 0.43** — 0.42.x (18–19 Sep 2026): π0.5's preliminary leg (roleplay 1/30 against 0/30,
+  no transfer claimed) and `E-2026-12`, fragility under the roleplay frame rather than attacker
+  control (the no-target frame exits at 27/30). 0.41.2 (9 Sep 2026), the 14 September run's tool:
+  roleplay 42/50 against 1/50, uncalibrated, on ten Object tasks; before it, the sharded suite.
 
 Corrections to published numbers live in [docs/errata.md](docs/errata.md), not here; an incident's
 narrative belongs there too, and from 0.44.0 entries say what changed and why, in that order.
 
 ## [Unreleased]
+
+## [0.46.0] — 2026-10-21
+
+A hygiene release. The per-run significance column now tests each attack against the benign control
+arm's own counts with a one-sided Fisher exact test (E-2026-18): 21 of the 49 rows the old test
+marked ✅ were not significant, 19 of them on real policies, and the significance sections of the 65
+committed `report.md` files are re-rendered with a dated note. It also raises the `pillow` floor to
+`>=13.0` and moves the lockfile to 13.0.0, for nine advisories against 12.3.0 published on 20
+October 2026. Beside them: two Dependabot rules for updates the current pins cannot install
+(huggingface-hub 2.x, datasets 5), docs and docstrings that had fallen behind what 0.45.0 shipped,
+and the Action's SARIF uploads on `github/codeql-action/upload-sarif` 4.38.3. **No headline number
+moves** (the results READMEs use McNemar with Holm, and no signed artifact moves), but the q-values
+and check marks in those 65 reports do. The published measurement is still the 14 September run on
+0.41.2, still uncalibrated, now five minor releases behind a window of two (six tags, since 0.42.1
+was a patch): `watch/publish-freshness.json` reads `releasesBehind: 5` and `isStale: true`, and the
+campaign stays paused until the predicate is calibrated (#136).
 
 ### Changed
 
@@ -52,12 +68,22 @@ narrative belongs there too, and from 0.44.0 entries say what changed and why, i
   apply to security updates and run 97 was one; a 4.x fix would still be proposed.
 - Dependency bumps, taken from Dependabot #310 and #312 into this change so they land with it:
   `astral-sh/setup-uv` 10.0.1 → 10.2.0, and 5.4.2 → 10.2.0 in the two leaderboard workflows that
-  were still on v5; `github/codeql-action/upload-sarif` 4.38.1 → 4.38.2. The two v5 workflows are
-  manual-only and pass setup-uv nothing but `enable-cache: true`, and no workflow here runs on the
-  `pull_request_target`, `workflow_run` or `release` events where v10 turns the cache off.
+  were still on v5; `github/codeql-action/upload-sarif` 4.38.1 → 4.38.2, then 4.38.3 (#322), the
+  pin both SARIF uploads in `action.yml` use. The two v5 workflows are manual-only and pass setup-uv
+  nothing but `enable-cache: true`, and no workflow here runs on the `pull_request_target`,
+  `workflow_run` or `release` events where v10 turns the cache off.
 
 ### Fixed
 
+- **`pillow` floor raised `>=12.3` → `>=13.0`, and the lockfile moved 12.3.0 → 13.0.0.** Why: nine
+  advisories against 12.3.0 were published on 20 October 2026 (OSV, all fixed in 13.0.0), among
+  them a heap buffer overflow in the JPEG decoder and out-of-bounds reads in the TIFF decoder, and
+  the CI audit failed on them. `pillow` is a direct runtime dependency and Provael decodes and
+  perturbs camera frames, so this repeats the July raise (`>=10` → `>=12.3`). With the old floor a
+  fresh `pip install` already resolved 13.0.0 (out since 16 October), but an environment that held
+  12.x kept it, and the container image installs the lockfile, so it shipped 12.3.0. 13.0.0's
+  backwards-incompatible changes (Python 3.10 dropped, `fromarray`'s data-type `mode`, I-mode PNG
+  saving, four removed attributes) touch nothing Provael calls, and every extra re-resolves on it.
 - **The per-run significance column no longer reads the benign rate as a known constant
   (E-2026-18).** Why: `fdr_by_attack` and the dossier's per-family test ran a one-sample binomial
   against the observed benign false-positive rate, clamped to 1e-12 at 0/n, so a single success
