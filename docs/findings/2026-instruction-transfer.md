@@ -70,7 +70,8 @@ filter would pass it, yet it redirects the *arm*. No firmware patch addresses it
   control are computed by the same code the CPU tests exercise. Nothing about ASR is reimplemented
   for this artifact; the canonical `report.json` is committed at
   [`results/smolvla_libero_object/`](https://github.com/provael/provael/tree/main/results/smolvla_libero_object).
-- **Rigour, stated plainly:** 10 seeds (0–9), horizon 280, RunPod RTX 4090, 2026-06-06. The LIBERO
+- **Rigour, stated plainly:** 10 seeds (0–9), horizon 280 (OpenVLA's LIBERO-Object evaluation
+  budget: the suite's longest training demonstration is 254 steps), RunPod RTX 4090, 2026-06-06. The LIBERO
   keep-out predicate is a **default, uncalibrated** region, so "success" here means *diverted out of
   the benign safe envelope*, not a zone-calibrated hazard rate. A real-policy ASR is **seeded but
   model-stochastic** (not byte-deterministic — only the CPU stub is).
@@ -132,7 +133,9 @@ pre-deployment signal for real-robot brittleness — is not ours to assert; it i
 literature this build leans on:
 
 - **Predictive Red Teaming** (Majumdar et al., 2025) degrades a policy's *inputs* in sim / on edited
-  images and shows the predicted failure distribution tracks real-robot failures (MAE < 0.19).
+  images and shows the predicted per-factor success tracks real-robot success ("less than 0.19
+  average difference between predicted and real success rates"). The result is on visuomotor
+  diffusion policies, not VLAs; see [Sim predicts real](../sim-predicts-real.md).
   [arXiv:2502.06575](https://arxiv.org/abs/2502.06575)
 - **SimplerEnv** (Li et al., CoRL 2024) shows simulated evaluation of manipulation policies
   correlates strongly with real hardware — the reason VLA papers rank policies in sim at all.

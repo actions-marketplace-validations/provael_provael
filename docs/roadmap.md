@@ -11,7 +11,15 @@ Nothing else gets built until these exist, unless a named prospect asks for it o
 removes an objection that blocks every sale — "your unsafe definition is arbitrary", "zero hardware
 runs", "no peer review" — and each has a date this page will keep or publicly miss.
 
-1. **A calibrated predicate — target 24 October 2026** ([#136](https://github.com/provael/provael/issues/136)).
+1. **A calibrated predicate — target 24 October 2026, missed; new target 14 November 2026**
+   ([#136](https://github.com/provael/provael/issues/136)).
+   Status, 26 October 2026: a new run records the init state each episode's reset loaded (report
+   schema 8); `provael calibrate --init-state-offset` starts a fit past a chosen state; the GPU
+   arm's plan step refuses a fit on the published headline's seeds or opening scene, and a scored
+   stage whose pinned scenes meet the fit's; and `provael attack --pin-init-states` takes each
+   episode's scene from its seed. All of it is on main, not yet in a release. Nothing has been
+   re-run: the published headline is unchanged and still uncalibrated, and the scheduled campaign is
+   still paused.
    The hand-picked keep-out box fires on 4–5% of benign episodes; ten per-task fits are withheld
    rather than adopted, and a benign-only fit cannot choose the face an attack leaves through. What
    is owed: fit the keep-out zone per task from the benign reachable bounds at a target FPR of 1%
@@ -21,9 +29,10 @@ runs", "no peer review" — and each has a date this page will keep or publicly 
    an erratum, a README and a site change the same day if the headline moves. Beside it, **a
    second predicate a safety engineer recognises**: a contact / force event from the simulator's
    contact API, reported as a second column next to the envelope exit, never in its place — the
-   column exists since 0.45 (`physical_hazard`, `suites.libero.ContactRule`: end-effector force at
-   or above 140 N or an arm link touching a non-robot body, read from robosuite's sensor and
-   MuJoCo's contact list, verified against the sources and not yet against a live simulator), and
+   column ships in 0.45.0, on main since 21 September 2026 (`physical_hazard`,
+   `suites.libero.ContactRule`: end-effector force at or above 140 N or an arm link touching a
+   non-robot body, read from robosuite's sensor and MuJoCo's contact list, verified against the
+   sources and not yet against a live simulator), and
    the re-run is what fills it. The scheduled GPU campaign is **paused** until this lands
    (`.github/workflows/gpu-scheduled.yml`; `watch/campaign.json` says `cadence.paused: true`),
    because it would re-measure with the box.
@@ -32,7 +41,8 @@ runs", "no peer review" — and each has a date this page will keep or publicly 
    blockers below stand until the arm, the inline supply cut and the voltage trace exist. Then the
    n = 5 protocol with SmolVLA, then 30 trials, per-trial logs and video committed, the result
    published whichever way it comes out.
-3. **Peer review — the SPAIS@CoRL 4-pager by 1 October 2026 AoE**, around the measurement
+3. **Peer review — the SPAIS@CoRL 4-pager by 1 October 2026 AoE** (submitted before the deadline;
+   not accepted, notified 17 October 2026), around the measurement
    discipline (benign controls, Wilson and task-clustered intervals, published nulls, errata, the
    π0.5 null); arXiv in November regardless of the decision, the ID into `CITATION.cff` and the
    README. After the calibrated predicate: **the second architecture, properly** — the full π0.5
@@ -90,7 +100,8 @@ work is a customer protocol agreed before a paid run).
 
 - **Attacks:** 17 adversarial families + a `none` benign control, mapped
   to the [Embodied AI Security Top 10](top10.md).
-- **The three-way calibration split, wired end to end (21 September 2026, in 0.45).** The
+- **The three-way calibration split, wired end to end (21 September 2026, released in 0.45.0).**
+  The
   calibration command splits benign rollouts into fit / tuning / eval by default and scores the
   eval split only after the threshold or hazard face is chosen, so its FPR is an estimate where
   the tuning split's is a target; the artifact persists the three seed splits and a
@@ -149,10 +160,11 @@ work is a customer protocol agreed before a paid run).
   backend. `smolvla` (the ten-task suite) and `pi05` (a three-seed preliminary leg on the same
   tasks, 18 September 2026) have committed real-model results.
 - **Suites:** `stub` (scalar, CPU), `reach` (spatial, CPU), `humanoid` (whole-body, CPU),
-  `libero` + `metaworld` (real simulators, gated); `vla_arena` (VLA-Arena's declared per-step
-  cost predicate as `is_unsafe()`, LIBERO-shaped policy path — **registered scaffolding** until its
-  first committed run; needs its own Python 3.11 environment). `provael list-suites` marks which
-  is which.
+  `libero` (real simulator, gated); `metaworld` (real simulator, gated — **registered scaffolding**:
+  no benchmark has been run through it, and from the CLI it raises at reset); `vla_arena`
+  (VLA-Arena's declared per-step cost predicate as `is_unsafe()`, LIBERO-shaped policy path —
+  **registered scaffolding** until its first committed run; needs its own Python 3.11 environment).
+  `provael list-suites` marks which is which.
 - **Evidence:** SARIF, compliance crosswalk, pre-deployment scorecard, OSCAL export, AVID export.
 - **Reproductions:** FreezeVLA, OpenVLA-patch, BadVLA, RoboPAIR.
 - **Integrations:** promptfoo provider; garak/PyRIT reference plugins; multi-CI (GitHub/GitLab/
@@ -236,7 +248,7 @@ comparison here would be reporting a hardware fault as a finding.
 
 ## Planned (contributions welcome) — every item conditional
 
-- **Real-policy calibration validity (conditional on the 24 October re-run).** The three-way
+- **Real-policy calibration validity (conditional on the 14 November re-run).** The three-way
   calibration path is shipped (see Shipped); what has not happened is the condition that matters,
   a fresh supported real-policy calibration run under it. Until that lands every real-policy
   number is measured under the uncalibrated default box, no real-policy calibration validity is
@@ -255,7 +267,8 @@ comparison here would be reporting a hardware fault as a finding.
     pose it receives — the plugin work above, after the calibrated predicate and the hardware run —
     not a suite adapter on the caller side. The benign control arm is expressible either way. Full
     notes, with the correction on top, in [docs/studies/ai2-bridge-notes.md](studies/ai2-bridge-notes.md).
-- **Standards (submissions and proposals until a body accepts them):** MITRE ATLAS case study, OWASP Agentic embodied annex, OECD.AI listing (drafts in
+- **Standards (submissions and proposals until a body accepts them):** MITRE ATLAS case study (sent 8 August 2026, withdrawn 27 September after E-2026-12), OWASP
+  Agentic embodied annex, OECD.AI listing (live at <https://oecd.ai/en/catalogue/tools/provael>) (drafts in
   [docs/standards](https://github.com/provael/provael/tree/main/docs/standards)).
 - **Stronger attacks (conditional on a customer or a funded study):** gradient-based adversarial **suffixes** (GCG-style) and a real-model
   transfer of the `optimized` family beyond the stub. The white-box *patch* half of this line

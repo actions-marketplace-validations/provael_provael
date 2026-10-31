@@ -33,6 +33,17 @@ from pydantic import BaseModel, ConfigDict, Field
 type Observation = dict[str, Any]
 type State = dict[str, Any]
 
+
+def init_state_of(observation: Observation) -> int | None:
+    """The fixed initial state a suite's reset loaded, from the observation the reset returned.
+
+    A suite that walks a list of fixed initial states (LIBERO) puts the one each reset loaded under
+    ``"init_state"``; every other suite leaves the key out. Anything but a plain integer reads as
+    ``None`` rather than being coerced into a scene nobody recorded.
+    """
+    loaded = observation.get("init_state")
+    return loaded if isinstance(loaded, int) and not isinstance(loaded, bool) else None
+
 # An action vector emitted by a policy / consumed by a suite.
 type Action = npt.NDArray[np.float32]
 
@@ -242,7 +253,7 @@ class AttackResult(BaseModel):
     decisions: list[Decision] = Field(
         default_factory=list,
         description="Per-episode log: one Decision per executed timestep (P0.4). Deterministic on "
-        "the stub; bound by the report.json SHA-256 the attestation subject records.",
+        "the stub; bound by the attestation subject with the rest of report.json.",
     )
     trajectory: Trajectory | None = Field(
         None,
@@ -266,6 +277,17 @@ class AttackResult(BaseModel):
         "`seed`, which has always been the ENVIRONMENT seed. Recording only the environment seed "
         "is what let two rows at the same commit be non-comparable while both looked fully "
         "specified. Present from schema_version 5.",
+    )
+    init_state: int | None = Field(
+        None,
+        description="Which of the task's fixed initial states this episode's reset loaded, read "
+        "from the environment after the reset (LIBERO: lerobot's `init_state_id` less the stride "
+        "the reset added, modulo the number of states). None where the suite has no fixed "
+        "initial states.\n\nThe seed does not pick it under lerobot 0.5.1: a reset counter does, "
+        "and a success ends an episode with a second reset, so two episodes at one seed can start "
+        "from different scenes and a resumed run restarts the counter. Neither leaves a trace in "
+        "`seed`; this field is the record of which scene ran (#136). Present from "
+        "schema_version 8.",
     )
 
 
@@ -564,9 +586,12 @@ class ComponentProfile(BaseModel):
 class RunReport(BaseModel):
     """The full, deterministic result of a red-team run.
 
-    DIGEST CONTRACT (read before adding a field). ``provael.attest`` binds an attestation to
-    ``sha256`` of a *canonical, SCHEMA-AWARE projection* of this model, not to the bytes of
-    ``report.json`` and not to a bare re-serialisation:
+    DIGEST CONTRACT (read before adding a field). Two digests identify a report, by different
+    rules. A v2 attestation (issued from 0.45) binds ``sha256`` of ``report.json`` exactly as
+    written, so nothing about this model can move it for a file already on disk. Every other digest
+    over a RunReport — the execution and evidence manifests, leaderboard inputs, shard digests, and
+    the subject of a v1 attestation — is ``sha256`` of a *canonical, SCHEMA-AWARE projection* of
+    this model, not of the file's bytes and not of a bare re-serialisation:
 
         report_digest = sha256(canonical_json(attest.report_projection(report)))
 
@@ -581,10 +606,11 @@ class RunReport(BaseModel):
     on doing the bare dump anyway, and two of them shipped broken:
     ``leaderboard._inputs_digest`` (fixed 0.36.1) and ``combine.shard_digests`` (fixed 0.36.2).
 
-    So the rule, stated once: **any digest over a RunReport goes through
-    ``attest.report_projection``.** Adding an optional field is then additive rather than breaking —
-    register it in ``_RESULT_FIELDS_ADDED_IN`` with its schema version, bump ``schema_version`` in
-    the same change that starts emitting it, and old attestations keep verifying.
+    So the rule, stated once: **any digest over a parsed RunReport goes through
+    ``attest.report_projection``** (the v2 attestation subject hashes the file instead, and never
+    re-serialises). Adding an optional field is then additive rather than breaking — register it in
+    ``_RESULT_FIELDS_ADDED_IN`` with its schema version, bump ``schema_version`` in the same change
+    that starts emitting it, and old manifests and v1 attestations keep verifying.
 
     ``extra="forbid"`` is set so an unrecognised key cannot ride along into the signed payload: a
     report file carrying an unexpected field is rejected at load rather than silently absorbed into
@@ -633,6 +659,8 @@ class RunReport(BaseModel):
         "records, per calibrated task, which split the calibration came from, its eval-split FPR "
         "and whether its binding holds for this run (`calibration.<task>.split` / `eval_fpr` / "
         "`binding`) — a tuned predicate and a bound one no longer look the same in the report. "
+        ">=8 records `init_state`, the fixed initial state each episode's reset loaded, which the "
+        "seed does not determine on LIBERO. "
         "Additive with a default, so a v2 report still loads; what a v2 report cannot do is feed "
         "a calibration, because its trajectories do not exist.",
     )

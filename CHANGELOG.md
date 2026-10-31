@@ -8,24 +8,183 @@ All notable changes to this project are documented here. The format is based on
 the entries below are the ones a reader arriving today needs, newest at the top. Every heading is a
 release the tag exists for; the Unreleased section holds what is merged and not yet cut.
 
+- **0.46.0 (21 Oct 2026)** — hygiene, `pillow>=13.0` for nine advisories, and significance tested
+  against the control arm's own counts (E-2026-18; 21 of the 49 ✅ rows were not). No headline number
+  moves; the published measurement (0.41.2, uncalibrated) is five minor releases behind.
+- **0.45.0 (28 Sep 2026)** — attestation v2: bundles bind `report.json`'s bytes and sign a 306-byte
+  record a KMS key can sign (0.44 cannot verify v2; v1 still verifies); three-way calibration
+  (schema 7); a contact/force predicate (unmeasured); the ML-BOM names the policy; Meta-World is
+  scaffolding; the signed clock's ISO 10218 date corrected (E-2026-17). No published number moves.
+- **0.44.0 (20 Sep 2026)** — hygiene and scope: `full-sweep` on a real policy narrows to measured
+  families, `certify` becomes `dossier`, the machinery route is reframed. No measured number moves.
 - **0.43.0 (19 Sep 2026)** — a release verdict is made only under a named acceptance protocol
   (`--protocol`); without one every export says `incomplete — not assessed`. Evidence manifest v2
   with the coverage counts in one convention (17 families, 39 attacks); π0.5 packaged as measured
   (preliminary). The fourteen-item correction backlog, worked in order.
-- **0.42.1 / 0.42.0 (18–19 Sep 2026)** — the second architecture: π0.5's preliminary leg on
-  LIBERO-Object (roleplay 1/30 against 0/30, no transfer claimed); the coverage counter counts
-  policies as well as families; `E-2026-12`: the headline is fragility under the roleplay frame,
-  not attacker control — the no-target frame exits at 27/30, the scrambled tokens at 18/30.
-- **0.41.2 (9 Sep 2026)** — the 14 September re-measurement's tool version: roleplay 42/50
-  against 1/50 on all ten Object tasks, inside the August interval; publication freshness as a
-  derivable artifact (`watch/publish-freshness.json`).
-- **Before 0.41** — the ten-task suite result and the sharded GPU runner (0.32), the benign-reword
-  and nonsense controls, signed attestations, the compliance crosswalk, the Top 10, the leaderboard.
+- **Before 0.43** — 0.42.x (18–19 Sep 2026): π0.5's preliminary leg (roleplay 1/30 against 0/30,
+  no transfer claimed) and `E-2026-12`, fragility under the roleplay frame rather than attacker
+  control (the no-target frame exits at 27/30). 0.41.2 (9 Sep 2026), the 14 September run's tool:
+  roleplay 42/50 against 1/50, uncalibrated, on ten Object tasks; before it, the sharded suite.
 
 Corrections to published numbers live in [docs/errata.md](docs/errata.md), not here; an incident's
 narrative belongs there too, and from 0.44.0 entries say what changed and why, in that order.
 
 ## [Unreleased]
+
+### Changed
+
+- **Dependabot's security jobs now read ignore rules.** Why: they run as the `uv` package manager
+  and read only a `uv` entry, so the rules under `pip`, 0.46.0's datasets rule included, never
+  reached them (every job printed `"ignore-conditions":[]`). A security-only `uv` entry
+  (`open-pull-requests-limit: 0`) now carries one rule for each update the lerobot 0.5.1 pin cannot
+  install, with the blocking requirement beside it: torch, transformers, diffusers and setuptools
+  (four `dependency_file_not_resolvable` jobs on 21 October 2026), datasets and fsspec. The
+  `[lerobot]`, `[hardware]` and `[openvla]` extras keep the advised versions until that pin moves;
+  the default install carries none of them.
+- **The GPU arm's plan step refuses a calibrate dispatch that rolls out a seed the headline run
+  scored, read from that run's records (#335).** Why: the stage fitted on seeds 0-6 and the
+  headline, still uncalibrated, scored 0-4, so a calibrated re-run on those seeds would score its
+  benign floor on episodes the envelope was fitted on.
+- **Each LIBERO episode records the init state its reset loaded (`init_state`, report schema 8).**
+  Why: the starting scene follows a reset counter the seed never reaches, so without it the
+  calibrate check could only place a task's first episode (#136). The adapter reads the state back
+  from lerobot's counter after every reset, so a resumed run is recorded as it ran, and calibration
+  artifacts record it for every rollout. Older reports load as before and their digests do not move.
+- **The calibrate plan step compares the fit's planned init states with the ones a scored run
+  recorded, per task.** Why: the opening-scene check (#339) could see only each task's first
+  episode; with recorded states it refuses on any overlap and names an offset that would clear
+  them. A run whose records carry none, the uncalibrated headline among them, keeps that check.
+- **`provael calibrate --init-state-offset` starts each task's fit at a chosen init state.** Why:
+  so a fit can begin past the states a scored run recorded. The GPU arm's stage carries it at 0;
+  the plan step refuses a non-zero offset against a run without recorded init states, and while
+  the image installs provael 0.46.0, whose `calibrate` has no such flag.
+- **`provael attack --pin-init-states START` takes each LIBERO episode's starting scene from its
+  seed: the episode at seed s starts from init state (START + s) mod 50, in every arm.** Why:
+  otherwise lerobot's reset counter picks the scene, so a scored run's scenes depended on what the
+  episodes before it did. Pinned, they are known before the run, and every arm at a seed shares one.
+  The adapter sets the counter before every reset and raises if the state it reads back is not the
+  one asked for. The GPU arm's plan step refuses a pinned stage whose states meet the calibrate
+  fit's window. The `control` stage pins at 45 (states 45-49, clear of the fit's 0-12), and its
+  plan is refused while the image installs provael 0.46.0, which lacks the flag.
+
+### Fixed
+
+- **The calibrate stage's cost line priced a one-hour timeout (#334).** Why: the timeout has been
+  5,400 s since the fit gained its attacked arm, so the example's table said ~$8 where the plan step
+  prints ~$11.99. It now says ~$11.99 (10 x 1.5 h), and a test ties every ceiling line to its stage.
+- **The roadmap's peer-review proof still said the SPAIS notification was due (#336).** Why: the
+  workshop did not accept the paper (notified 17 October 2026). The roadmap, the paper's README and
+  the community page now say so, and the arXiv posting in November stands.
+- **The roadmap says the 24 October 2026 date for #136 was missed, and gives the new target, 14
+  November 2026.** Why: the page promises to keep each date or miss it in public. A test now fails
+  on any past target in its Now section without "missed" or "delivered" beside it. Nothing was
+  re-run, and the published headline is unchanged and still uncalibrated.
+
+### Security
+
+- hydra-core 1.3.7 to 1.3.8 in the lock (GHSA-wf6j-7hvr-gr93). It comes in only through hf-libero,
+  in the `[lerobot]` and `[hardware]` extras, and src never calls `instantiate()`, so the default
+  install was never affected.
+- tornado 6.5.9 to 6.6 in the lock (GHSA-r4j5-9xpp-3985, GHSA-pcg2-g6cj-q92c, GHSA-pw9p-v7r6-gx4p).
+  It comes in only through the docs group, and Provael never serves tornado, so no install was
+  affected.
+
+## [0.46.0] — 2026-10-21
+
+A hygiene release. The per-run significance column now tests each attack against the benign control
+arm's own counts with a one-sided Fisher exact test (E-2026-18): 21 of the 49 rows the old test
+marked ✅ were not significant, 19 of them on real policies, and the significance sections of the 65
+committed `report.md` files are re-rendered with a dated note. It also raises the `pillow` floor to
+`>=13.0` and moves the lockfile to 13.0.0, for nine advisories against 12.3.0 published on 20
+October 2026. Beside them: two Dependabot rules for updates the current pins cannot install
+(huggingface-hub 2.x, datasets 5), docs and docstrings that had fallen behind what 0.45.0 shipped,
+and the Action's SARIF uploads on `github/codeql-action/upload-sarif` 4.38.3. **No headline number
+moves** (the results READMEs use McNemar with Holm, and no signed artifact moves), but the q-values
+and check marks in those 65 reports do. The published measurement is still the 14 September run on
+0.41.2, still uncalibrated, now five minor releases behind a window of two (six tags, since 0.42.1
+was a patch): `watch/publish-freshness.json` reads `releasesBehind: 5` and `isStale: true`, and the
+campaign stays paused until the predicate is calibrated (#136).
+
+### Changed
+
+- **`scoring/asr.py` says which rates return `0.0` and which return `None`.** Why: its module
+  docstring said every rate returns `0.0` on zero attempts, but the signal-dependent rates return
+  `None` when their signal is absent, and the `0.0` that `attack_success_rate` returns for an empty
+  input is the serialization sentinel `ASRStat.asr` also stores, not a measured 0% (read
+  `ASRStat.measured_rate` for N/A). Docstrings only: no behaviour and no published number moves.
+- **Dependabot no longer proposes huggingface-hub major versions.** Why: #311 raised the
+  leaderboard Space's floor to `huggingface_hub>=2.0.0`, and neither place that installs the package
+  resolves with 2.x. The Space runs gradio 6.23.1 (`sdk_version` in `leaderboard/README.md`), which
+  requires `huggingface-hub>=1.16.0,<2.0`, and lerobot 0.5.1, pinned for the GPU path, requires
+  `>=1.0.0,<2.0.0`; `uv pip compile` with 2.1.1, the newest 2.x, is unsatisfiable against each.
+  `.github/dependabot.yml` now ignores huggingface-hub majors with that reason beside the rule, and
+  #311 is closed. The rule lifts once the Space's gradio and the lerobot pin have both moved
+  (gradio 6.29.0 already accepts 2.x).
+- **Dependabot no longer proposes datasets updates the lerobot 0.5.1 pin cannot install.** Why: the
+  update for datasets failed on main (run 97), and the pin is held on purpose until the arm run.
+  The rule ignores `versions: [">=5"]` rather than an update type, because update types never
+  apply to security updates and run 97 was one; a 4.x fix would still be proposed.
+- Dependency bumps, taken from Dependabot #310 and #312 into this change so they land with it:
+  `astral-sh/setup-uv` 10.0.1 → 10.2.0, and 5.4.2 → 10.2.0 in the two leaderboard workflows that
+  were still on v5; `github/codeql-action/upload-sarif` 4.38.1 → 4.38.2, then 4.38.3 (#322), the
+  pin both SARIF uploads in `action.yml` use. The two v5 workflows are manual-only and pass setup-uv
+  nothing but `enable-cache: true`, and no workflow here runs on the `pull_request_target`,
+  `workflow_run` or `release` events where v10 turns the cache off.
+
+### Fixed
+
+- **`pillow` floor raised `>=12.3` → `>=13.0`, and the lockfile moved 12.3.0 → 13.0.0.** Why: nine
+  advisories against 12.3.0 were published on 20 October 2026 (OSV, all fixed in 13.0.0), among
+  them a heap buffer overflow in the JPEG decoder and out-of-bounds reads in the TIFF decoder, and
+  the CI audit failed on them. `pillow` is a direct runtime dependency and Provael decodes and
+  perturbs camera frames, so this repeats the July raise (`>=10` → `>=12.3`). With the old floor a
+  fresh `pip install` already resolved 13.0.0 (out since 16 October), but an environment that held
+  12.x kept it, and the container image installs the lockfile, so it shipped 12.3.0. 13.0.0's
+  backwards-incompatible changes (Python 3.10 dropped, `fromarray`'s data-type `mode`, I-mode PNG
+  saving, four removed attributes) touch nothing Provael calls, and every extra re-resolves on it.
+- **The per-run significance column no longer reads the benign rate as a known constant
+  (E-2026-18).** Why: `fdr_by_attack` and the dossier's per-family test ran a one-sample binomial
+  against the observed benign false-positive rate, clamped to 1e-12 at 0/n, so a single success
+  against a thin control came out "significant". 21 of the 49 rows marked ✅ in committed reports
+  were not significant, 19 of them on real policies. Both tests now use a one-sided Fisher exact
+  test against the control arm's own counts (`provael.scoring.asr.fisher_exact_greater`), and a
+  report without benign counts gets no significance. The significance sections of the 65 committed
+  `report.md` files are re-rendered from their unchanged `report.json`, each with a dated note. No
+  headline number moves (the results READMEs use McNemar with Holm), and no signed artifact moves.
+- **The SPAIS paper README kept its 1 October to-do list after the deadline passed.** Why: nothing
+  read the date, so the repository could not say whether the paper went in, and the list still
+  implied the calibrated re-fit could land before 1 October when the roadmap dates it to
+  24 October 2026. `paper/spais/README.md` and the roadmap's proof 3 now record the submission and
+  the 17 October 2026 notification, the community page's two closed calls say they closed, and
+  `tests/test_docs_no_past_todo.py` fails when a paper README or the roadmap's Now section keeps a
+  to-do dated in the past. No measured number moves.
+- **The studies index said neither defense had a real-policy defended arm committed.** Why: 0.45.0
+  counts two (`realPolicyDefenses` 0 → 2), both committed on 18 September under `results/`, and the
+  index row for each still read "no real-policy defended arm committed". The rows now say an arm is
+  committed and what it does not show, and each study page gains a dated note with the arm's
+  result: canonicalization 20/30 against a 1/30 floor, not a reduction against the undefended
+  42/50 at other seeds; the envelope 0/30 with competence 0/30, so it says nothing about the attack.
+  No measured number moves.
+- **Seven passages said "on main, not yet in a release" about what 0.45.0 shipped.** Why: the
+  release made them false the day it was cut — the schema-7 section of `docs/attestation.md`, the
+  glossary's three-way fit, the quickstart's contact predicate, two roadmap items, `suites/libero.py`'s
+  module docstring, and E-2026-16's status line ("in no release yet"). Each now names 0.45.0.
+
+## [0.45.0] — 2026-09-28
+
+The attestation-format release. A signed bundle now binds the exact bytes of `report.json`, and its
+Ed25519 signature covers a 306-byte record that names the statement, so a key held in AWS KMS can
+sign it (`provael-attestation/v2`; a 0.44.0 verifier cannot check a v2 bundle, so upgrade verifiers
+before issuers, and v1 bundles keep verifying). Beside it: `provael calibrate` splits benign
+rollouts three ways by default (report schema 7), a second predicate for contact and force events
+is wired and unmeasured, the ML-BOM describes the policy rather than the tool, Meta-World is
+declared scaffolding (4 runnable / 3 scaffolding suites), three ATLAS tactic names are corrected
+(E-2026-16), and the signed regulatory clock carries ISO 10218 at the month ISO gives (E-2026-17,
+ruleset `/6`). **No previously published number moves**; three 18 September workstation
+measurements are added beside the headline, each with what it does not show. The published
+measurement is still the 14 September run on 0.41.2, now four releases behind a window of two:
+`watch/publish-freshness.json` reads `isStale: true`, and the campaign stays paused until the
+predicate is calibrated (#136).
 
 ### Added
 
@@ -73,7 +232,9 @@ narrative belongs there too, and from 0.44.0 entries say what changed and why, i
   faces): every fit reports a benign FPR of 0.0 and they differ only in whether the boundary
   catches anything — tasks 0/6/8 catch every attacked rollout, task 3 catches one in six, tasks 5
   and 7 chose the opposite face and catch none. Eight would be adopted and two withheld, which is
-  why a benign-only fit is not enough. These are two-way fits at a 5% target and carry no binding;
+  why a benign-only fit is not enough. Those detection rates are in-sample: the same six attacked
+  rollouts chose each face (the candidate that catches the most of them), so none is a held-out
+  rate. These are two-way fits at a 5% target and carry no binding;
   the three-way re-fit supersedes them. `realPolicyDefenses` moves 0 to 2 across `watch/`, the
   evidence manifests and the docs counts, and the two assertions that pinned it at zero now read
   two. No previously published number moves.
@@ -108,6 +269,125 @@ narrative belongs there too, and from 0.44.0 entries say what changed and why, i
   checkmark this repository had carried since before the mark existed is retired everywhere, and
   the README wordmark gains a dark-scheme variant. The retired `social_preview.png` (the July
   "100 %" card) is deleted; the repository's social preview is the website's `og.png`.
+- **The ML-BOM names the model it describes, and carries a serial number.** Why: `metadata.component`
+  is the component a CycloneDX BOM describes, and it named provael, the tool, so a consumer read
+  the BOM as describing the red-team harness rather than the policy it measured; and the BOM had
+  no `serialNumber`, which CycloneDX says every BOM should carry. The policy under test (its model
+  card included) is now `metadata.component`, provael moves to `metadata.tools.components`, and the
+  model is no longer repeated in top-level `components`. The serial is a UUIDv5 of the report's
+  canonical JSON rather than a random UUID, so the same report still yields a byte-identical BOM.
+  Every emitted BOM is now validated against the official CycloneDX 1.6.2 JSON schema, vendored in
+  `tests/fixtures/cyclonedx-1.6`. **Consumers that read `metadata.component.name == "provael"`,
+  or that looked for the model under `components`, must read `metadata.tools` and
+  `metadata.component` instead.** No measured number moves.
+- **Attestations bind `report.json`'s bytes, and the signature covers a small fixed record
+  (`provael-attestation/v2`).** Why: a v1 subject was the SHA-256 of the report's model
+  projection, because the statement builder was handed a parsed report, so deleting a field whose
+  stored value equals its default (loading restores it) left the digest intact; and a signed
+  statement is 38 to 117 KB, while AWS KMS signs pure Ed25519 only over a raw message of at most
+  4,096 bytes, which ruled out a KMS-held key for the operated tier. What changed: the subject is
+  the SHA-256 of the file as written (`subject.binding: report-json-bytes/v1`, the value
+  `sha256sum report.json` prints), so `attest --verify --report` is a byte-for-byte check; the
+  Ed25519 signature covers a 306-byte signed record naming the statement's SHA-256 and the
+  subject's, a 363-byte message under the DSSE encoding (`attest.signed_record`,
+  `record_signing_message`). `ReportArtifact` carries the bytes read from disk to every statement
+  builder (`attest`, `certify`, `submit`, the assurance and insurer views), `submit` publishes the
+  submitter's `report.json` byte for byte instead of a re-serialised copy, the hosted server binds
+  the request body as received (post it with `curl --data-binary`, not `--data`), `report.json`
+  is written as LF bytes on every OS, and `.gitattributes` stops a Windows checkout rewriting
+  byte-bound files. The verifier now also rejects a bundle whose `payloadType` is not an
+  attestation, or whose statement format it does not know: before, a signature by the same key
+  over any payload type verified as an attestation. The certify dossier no longer calls the bundle
+  a PEP 740 attestation, which it never was. The committed insurer sample is regenerated as v2.
+  **Compatibility:** v1 bundles still verify, by the v1 rule (frozen fixtures in
+  `tests/fixtures/attestation_v1` pin it), and the verdict names the rule applied; 0.44.0 and
+  earlier cannot verify a v2 bundle, so upgrade verifiers before issuers. The execution and
+  evidence manifests keep the projection digest, which is no longer equal to the attestation
+  subject. No measured number moves.
+
+- **Meta-World is declared scaffolding: the published counts move from 5 runnable / 2 scaffolding
+  suites to 4 / 3.** Why: no Meta-World benchmark has ever been run (nothing under `results/`), and
+  its CLI path raises at reset, because the adapter refuses LIBERO's default keep-out box (it lies
+  behind the Sawyer arm), there is no zone option, and no Meta-World calibration is committed. That
+  is the project's own definition of scaffolding, and `watch/registry.json` still counted it as
+  runnable. `SCAFFOLDING_SUITES` now carries it with that reason (the CLI-gating note is folded in,
+  so `SUITE_GATING_NOTES` is empty); `list-suites` renders it as scaffolding, `doctor` now labels
+  every scaffolded suite as scaffolding rather than "importable", and `suite_is_ready("metaworld")`
+  is `False` whatever is installed. The docs and examples that described its status now call it
+  scaffolding (quickstart, attacks, FAQ, index, roadmap, and the suites and cross-suite examples);
+  `ActionLayoutError`'s hint no longer suggests `--suite metaworld`, and `examples/suites/README.md`
+  no longer calls its wiring "validated on the gated, real path", which the suite registry's own
+  comment ("never been introspected against an installed package") contradicted.
+  `watch/registry.json` and the generated inventory line in `docs/quickstart.md` are regenerated;
+  the website picks the counts up at its next re-pin. That inventory line's three groups are now
+  disjoint (3 CPU fixtures, 1 gated real simulator, 3 scaffolding): two suites are both gated and
+  scaffolding, and counting them in both made the line sum to 9 of 7 (8 of 7 before this change).
+  `scripts/gen_doc_counts.py` now refuses to render a line whose groups do not sum to the total.
+
+### Fixed
+
+- **`docs/attestation.md` still said the instruction family "redirects the policy 100% (10/10)".**
+  Why: that is the single-task figure the ten-task suite superseded in August, stated in the
+  framing E-2026-12 corrected, on the page that tells an auditor what a bundle proves. It now gives
+  `roleplay` 42/50 against a 1/50 benign floor on 0.41.2 (44/50 against 2/50 on 0.32.0) and reads it
+  as fragility under the frame, not attacker control, as `docs/index.md` does. The offline
+  real-observation study, which says "the published result is 10/10" in its motivation, gains a
+  dated note instead of a rewrite, as the π0 study already has. E-2026-17 records that ANSI/A3
+  R15.06-2025 is carried at year precision. No measured number moves.
+- **The signed regulatory clock dated ISO 10218 to 1 April 2025, a day no source gives (E-2026-17).**
+  Why: ISO's catalogue gives the publication date of both ISO 10218-1:2025 and -2:2025 as 2025-02,
+  a month with no day, and the clock sits inside every signed statement, so every attestation from
+  0.7.0 to 0.44.0 vouched for the unsourced day; the hosted conformity mapping typed the same day
+  again. What changed: the entry reads `applies_from: 2025-02`; every clock entry carries a
+  `date_precision` (day, month or year) and the model refuses a date written more finely than it;
+  the entry's note no longer calls a published standard "in force"; the hosted conformity rows read
+  their dates (and `applies_from_precision`) from the clock instead of repeating them; the ruleset
+  moves to `provael-attest-ruleset/6`, because manifests stamp it as their
+  `regulatory_clock_version` and two clocks must not share one; the committed evidence manifests
+  that stamp it (`results/smolvla_libero_object`, the 14 September delivery pack) and the insurer
+  sample are regenerated, and only that string and the clock move in them. No measured number moves.
+- **`list-suites` called Meta-World ready on `lerobot` alone, and "horizon 280" had no stated
+  source.** Why: Meta-World is a separate lerobot extra that `provael[lerobot]` does not bring in,
+  so a box with the extra was told the suite was ready and failed inside LeRobot's env factory;
+  both readiness checks now require the `metaworld` module too, and the module docstring agrees
+  with its own install hint. `suites.libero.LIBERO_HORIZON` records OpenVLA's per-suite evaluation
+  budgets (220 / 280 / 300 / 520, each just above the suite's longest training demonstration),
+  which every committed LIBERO run already used; the `eai04-redirect` recipe and the local sweep
+  read it, the sweep no longer runs libero_spatial at object's 280 by default, and
+  `tests/test_libero_horizon.py` holds committed runs to it. No measured number moves.
+- **Four published docs claims the repository no longer supports.** Why: each was found stale in
+  the 26 September re-verification of `AUDIT_BACKLOG.md` and `ISSUE_REGISTER.md`. `docs/faq.md`
+  and the instruction-transfer finding quoted Predictive Red Teaming as "MAE < 0.19" without the
+  caveat `docs/sim-predicts-real.md` already carries (the result is on diffusion policies, not
+  VLAs); `docs/index.md` listed GR00T and OpenVLA as real policies and Meta-World as a real
+  simulator (both policies are unrun scaffolding, and Meta-World is not runnable end to end);
+  `docs/standards/listings.md` said "nothing submitted yet" after sixteen listing PRs, and now
+  carries the ledger its own checklist asks for; `pyproject.toml` called lerobot 0.6.0 the newest
+  release (0.6.1 has been on PyPI since 3 August). The glossary now links the website's. No
+  measured number moves.
+- **Three module docstrings that had gone stale, and E-2026-15 in the errata log.** Why: each said
+  something the code no longer does. `combine.py` said `provael attack` cannot resume (the ledger
+  has been wired in as `--resume` since 30 August, #157); `attacks/controls.py` said `--attacks
+  control` resolves to "both arms" (it resolves to four); `scripts/gen_brand_assets.py` called the
+  website upstream "for every public number" (it is upstream for the brand only). `docs/errata.md`
+  records E-2026-15, the website's correction of two publication days its own regulatory clock does
+  not verify; no measured number moves.
+- **Four docs pages and `suites/libero.py`'s module docstring said the contact column and the
+  three-way calibration split shipped "since 0.45"**; there is no 0.45. Both are on `main` since
+  21 September 2026 (#278, #279) and in no release yet, and all six lines now say so.
+  `tests/test_counted_claims.py` fails on any tracked doc or `src/` docstring that names a release
+  after `provael.__version__` — the mirror of the checks that catch prose falling a release behind.
+- **Three ATLAS mappings named something that is not an ATLAS tactic.** Why: checked on
+  26 September 2026 against MITRE's data release 2026.09. EAI01 said "ML Attack Staging", a retired
+  name (AML.TA0001 is "AI Attack Adaptation" since 2026.08), and ATLAS files neither prompt
+  injection nor jailbreak under that tactic. It now reads Execution → LLM Prompt Injection and
+  Defense Evasion → LLM Jailbreak. EAI02 said "Evasion" for "Defense Evasion". The Top 10's own
+  crosswalk table already had both right. EAI03 put "ML Supply Chain Compromise", a technique
+  under its retired name, in the tactic slot: it is AI Supply Chain Compromise, under Initial
+  Access. The catalog, `results/crosswalk/crosswalk.atlas.json`, every SARIF rule's
+  `atlasTechniques` and `docs/standards/atlas-case-study.md` move together. `tests/test_eai.py`
+  now fails on a mapping whose tactic is not one of ATLAS's sixteen. The 8 August submission to
+  MITRE is left exactly as sent. No measured number moves.
 
 ## [0.44.0] — 2026-09-20
 

@@ -29,7 +29,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv (Python 3.12)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
       - name: Install (locked, CPU core only)
@@ -48,7 +48,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv (Python 3.12)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
       # The token is required, and its absence fails LOUDLY on purpose: a sync job that skips
@@ -65,7 +65,7 @@ jobs:
                  "named HF_TOKEN — the deployed Space is stale until this job can run."
             exit 1
           fi
-          uv run --no-project --with "huggingface_hub>=0.36" python - <<'EOF'
+          uv run --no-project --with "huggingface_hub==2.0.0" python - <<'EOF'
           import os
           from huggingface_hub import HfApi
 

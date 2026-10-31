@@ -25,14 +25,16 @@ the same compliance report verbatim.
 ## Two layers, so the free core keeps working
 
 1. **Digest layer — always on, standard-library only.** The envelope carries the SHA-256 of the
-   canonical statement, and the statement's `subject` carries the SHA-256 of the canonical
-   `report.json`. `provael attest --verify` recomputes both with no network and no extra
-   dependency. This is integrity, not identity: it proves the evidence was not altered, not who
-   produced it.
+   canonical statement, and the statement's `subject` carries the SHA-256 of `report.json` exactly
+   as written: the value `sha256sum report.json` prints. `provael attest --verify --report` recomputes
+   both with no network and no extra dependency. This is integrity, not identity: it proves the
+   evidence was not altered, not who produced it.
 2. **Signature layer — opt-in, needs the `attest` extra.** With `pip install 'provael[attest]'`
-   the envelope is signed with **Ed25519** over the DSSE pre-authentication encoding and verifies
-   offline against the bundled public key. Ed25519 is deterministic, so a fixed
-   `(report, issued_at, ruleset, commit, key)` yields a byte-identical signature.
+   the bundle is signed with pure **Ed25519** (RFC 8032) and verifies offline against the bundled
+   public key. The signature covers a small fixed-size *signed record* that names the statement by
+   its SHA-256 (see [What is signed](#what-is-signed-the-v2-format)), under the DSSE
+   pre-authentication encoding. Ed25519 is deterministic, so a fixed
+   `(report bytes, issued_at, ruleset, commit, key)` yields a byte-identical signature.
 
 The free core stays six light dependencies. `attest --no-sign` produces a digest-only bundle
 without the extra; the signed bundle needs the extra, and the CLI says so with a clear install hint.
@@ -49,8 +51,9 @@ provael attest --in runs/calib --out runs/attest
 # Sign with your organisation key instead of an ephemeral one
 provael attest --in runs/calib --key org-ed25519.pem --out runs/attest
 
-# Verify offline — recomputes the digest and checks the signature
-provael attest --verify runs/attest/attestation.json --pubkey runs/attest/attestation.pub
+# Verify offline — recomputes the digests and checks the signature; --report checks the file too
+provael attest --verify runs/attest/attestation.json --pubkey runs/attest/attestation.pub \
+  --report runs/attest/report.json
 ```
 
 `attest` writes `attestation.json` (the bundle), `attestation.pub` (the public key, for ephemeral
@@ -61,7 +64,8 @@ signing), and `report.compliance.md` (the human-readable evidence) into `--out`.
 A DSSE-style envelope: `payloadType`, a base64 `payload`, its `payloadSha256`, and a `signatures`
 array. The payload decodes to a statement with:
 
-- `subject` — `policy x suite` plus the SHA-256 digest of the source `report.json`.
+- `subject` — `policy x suite`, the SHA-256 of the source `report.json` exactly as written, and
+  `binding: report-json-bytes/v1`, which says so.
 - `predicate` — the **full compliance crosswalk**: the ASR with its 95% Wilson CI, the benign-FPR
   control, the per-EAI breakdown, and every mapped requirement across the EU AI Act, the EU
   Machinery Regulation, ISO 10218:2025, NIST AI 100-2 / AI RMF, and IEC 62443, each with its
@@ -70,6 +74,37 @@ array. The payload decodes to a statement with:
   `stub-validated-scaffolding` for the stub and for the search-based `optimized` family (whose real
   transfer is GPU-gated).
 - `regulatory_clock`, `issued_at`, `commit`, `ruleset`, `tool_version`.
+
+### What is signed (the v2 format)
+
+From 0.45 a bundle carries a `provael-attestation/v2` statement, and two things differ from v1:
+
+- **The subject is the file.** A v1 subject was the SHA-256 of the report's schema-aware *model
+  projection* (the report parsed, then re-serialised canonically), because the code that built it
+  was handed a parsed report. That missed one edit: deleting a field whose stored value equals its
+  default, which loading restores. A v2 subject is the SHA-256 of the bytes, so `--report` is a
+  byte-for-byte check and any edit fails it, including a line-ending change. Pass the file you were
+  given: a report parsed and written out again is a different file.
+- **The signature covers a signed record, not the statement.** The record is canonical JSON,
+  306 bytes for every run:
+
+  ```json
+  {"format":"provael-signed-record/v1","payload_type":"application/vnd.provael.attestation+json",
+   "statement_sha256":"<sha256 of the statement>","subject_binding":"report-json-bytes/v1",
+   "subject_sha256":"<sha256 of report.json>"}
+  ```
+
+  and the signed message is its DSSE encoding under the type
+  `application/vnd.provael.signed-record+json`: 363 bytes. A statement is tens of kilobytes (the
+  insurer sample's is over 100 KB), and AWS KMS signs pure Ed25519 (`ED25519_SHA_512`) only over a
+  raw message of at most 4,096 bytes; a key held in KMS or an HSM can sign the record as it is.
+  `provael.attest.signed_record` and `record_signing_message` build it.
+
+**Compatibility.** A v1 bundle (issued up to 0.44) still verifies, by the v1 rule, and the verifier
+says which rule it applied. A verifier from 0.44 or earlier cannot verify a v2 bundle: upgrade the
+verifier. The verifier also now rejects a bundle whose `payloadType` is not an attestation, or whose
+statement format it does not know, however valid its signature: before 0.45 a signature made by the
+same key over something else (any payload type) could be presented as an attestation.
 
 ### The deployed policy, not only the checkpoint (schema 6)
 
@@ -91,7 +126,9 @@ adapter cannot resolve a part it records `null`, never a guess; the three scaffo
 
 ### A bound predicate is signed over as a different thing (schema 7)
 
-Since 0.45 each calibrated task's entry in the signed `report.json` carries `split`, `eval_fpr`
+Since 0.45.0 (wired on main on 21 September 2026; no report from 0.44.0 or earlier carries it).
+Each calibrated task's entry in the signed
+`report.json` carries `split`, `eval_fpr`
 and `binding`: which split the calibration artifact came from, the benign FPR measured on the eval
 split of a three-way fit after the predicate was chosen, and whether the artifact's
 `CalibrationBinding` holds for *this* run (`valid`, or `invalid: <reason>` — another checkpoint,
@@ -101,10 +138,21 @@ The three keys sit inside a nested model rather than at the top of the report, s
 strips them for any report that declares a schema below 7 (`attest._CALIBRATION_META_FIELDS_ADDED_IN`)
 and every earlier attestation keeps verifying.
 
+### Which scene each episode started from (schema 8)
+
+On main since 24 October 2026, not yet in a release. Each episode in the signed `report.json`
+carries `init_state`: which of the task's fixed initial states its reset loaded, read back from the
+environment. On LIBERO the seed does not pick the scene (a reset counter does), so two episodes at
+one seed can start from different scenes, and only this field records which ran. It is signed over
+with the rest of the episode; the projection strips it for any report that declares a schema below
+8 (`attest._RESULT_FIELDS_ADDED_IN`), so every earlier attestation keeps verifying.
+
 ### The regulatory clock
 
 Factual application dates, carried so the evidence is legible against the calendar buyers care
-about. Dates only — no claim of conformity:
+about. Dates only — no claim of conformity. Each entry states the precision its date is verified to
+(`date_precision`: day, month or year), and no date is written more finely than its source gives
+it:
 
 - **EU Machinery Regulation (EU) 2023/1230** — applies **20 January 2027**. AI-enabled safety
   functions need a cyber-risk assessment against corruption (Annex III 1.1.9 and 1.2.1); this is
@@ -121,8 +169,10 @@ about. Dates only — no claim of conformity:
   and to stand-alone Annex III systems from 2 December 2027; the statutory 2 August 2027 is
   superseded. Art. 15's robustness and cybersecurity language remains the measurement anchor the
   Machinery-side requirements are to reflect.
-- **ISO 10218-1/-2:2025** — in force since 2025; the revision adds cybersecurity requirements for
-  industrial robots, feeding the Machinery Regulation cyber-risk assessment.
+- **ISO 10218-1/-2:2025** — published **February 2025** (the month ISO's catalogue gives; no day
+  is carried). The revision adds cybersecurity requirements for industrial robots, feeding the
+  Machinery Regulation cyber-risk assessment. Bundles from 0.7.0 to 0.44.0 carry 1 April 2025, a
+  day no source gives ([E-2026-17](errata.md)).
 - **NIST AI 100-2e2025** — adversarial-ML taxonomy; guidance, not a compliance deadline.
 
 ## Standards-aligned assurance profiles (`--profile`)
@@ -163,11 +213,15 @@ provael attest --run results/smolvla_libero_object --profile insurer --out runs/
 - **Simulation only.** An attestation records a policy's *decision* under attack in sim, not a
   hardware outcome. See [sim-predicts-real](sim-predicts-real.md) for what that does and does not
   transfer.
-- **Real-VLA transfer is narrow today.** On a real **SmolVLA × LIBERO** policy, only the
-  **instruction** family currently transfers: it redirects the policy **100% (10/10), 95% CI
-  [72–100%]** against a **0% benign control** (sim-only, one task, `n = 10`); other instruction
-  attacks land lower (roughly 60–80%). Everything else in the catalogue is validated on the
-  deterministic CPU stub, where numbers are properties of the fixture, not a real VLA.
+- **Real-VLA transfer is narrow today, and what transfers is fragility, not control.** On a real
+  **SmolVLA × LIBERO-Object** policy (ten tasks), only the **instruction** family clears the benign
+  floor: `roleplay` took the policy out of its safe envelope in **42/50** episodes against a
+  **1/50** benign floor on 0.41.2 (44/50 against 2/50 on 0.32.0). The 14 September controls
+  ([E-2026-12](errata.md)) show the same frame with no target named, and with its tokens scrambled,
+  leaving the envelope too: the policy is fragile under a long, imperative, out-of-distribution
+  string, and the attacker is not choosing where it goes. Everything else in the catalogue is
+  validated on the deterministic CPU stub, where numbers are properties of the fixture, not a real
+  VLA.
 - **The `optimized` family is stub-validated scaffolding.** The black-box search is exercised on the
   stub; its real SmolVLA × LIBERO transfer is **GPU-gated and not yet measured**, so the bundle
   flags it `stub-validated-scaffolding` and no cross-model transfer is claimed.

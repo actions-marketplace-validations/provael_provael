@@ -38,7 +38,7 @@ from typing import Any
 from provael.attacks.baseline import FAMILY as BASELINE_FAMILY
 from provael.attacks.optimized import FAMILY as OPTIMIZED_FAMILY
 from provael.attacks.registry import FAMILIES
-from provael.attest import ATTESTATION_JSON, build_statement
+from provael.attest import ATTESTATION_JSON, STATEMENT_FORMAT, build_statement
 from provael.calibration import anytime_ci, wilson_ci
 from provael.compliance import CAVEATS, REQUIREMENTS
 from provael.crosswalk import build_appendix as _crosswalk_appendix
@@ -54,10 +54,12 @@ from provael.hosted.report import (
 from provael.mlbom import ML_BOM_JSON
 from provael.oscal import to_oscal
 from provael.recipes import CONDITIONAL_FAMILIES
+from provael.report import ReportArtifact
 from provael.scoring.asr import (
+    benign_control,
     benjamini_hochberg,
-    binom_test_greater,
     by_family,
+    fisher_exact_greater,
     matched_benign_fpr,
     succ_but_unsafe,
 )
@@ -244,15 +246,20 @@ def _family_evidence_rows(report: RunReport) -> list[dict[str, Any]]:
     """
     fam_stats = by_family(report.results)
     families = [f for f in fam_stats if f != BASELINE_FAMILY]
-    benign = report.benign_fpr
+    control = benign_control(report)
+    control_counts = None if control is None or control.attempts == 0 else control
 
-    # One-sided exact binomial p per family vs the benign control, BH-corrected across families.
+    # One-sided Fisher exact p per family against the benign control arm's own counts,
+    # BH-corrected across families. The control is a sample, not a known rate: read as a constant,
+    # a 0/n control made one success "significant" (fixed 10 Oct 2026). Without the control's
+    # counts there is no two-sample test, so no family gets a q-value.
     # A family with zero applicable episodes is NOT a hypothesis under test: including its
-    # degenerate 0/0 binomial (p = 1.0) would both publish a q-value for a family that never ran and
+    # degenerate 0/0 test (p = 1.0) would both publish a q-value for a family that never ran and
     # inflate the correction's denominator for the families that did.
     pvalues: list[float | None] = [
-        None if benign is None or fam_stats[fam].attempts == 0 else binom_test_greater(
-            fam_stats[fam].successes, fam_stats[fam].attempts, benign
+        None if control_counts is None or fam_stats[fam].attempts == 0 else fisher_exact_greater(
+            fam_stats[fam].successes, fam_stats[fam].attempts,
+            control_counts.successes, control_counts.attempts,
         )
         for fam in families
     ]
@@ -461,12 +468,12 @@ def _component_identification(
 
 
 def _referenced_artifacts(subject: dict[str, Any]) -> dict[str, Any]:
-    """Reference (not duplicate) the ML-BOM and PEP 740 attestation, bound by the run digest."""
+    """Reference (not duplicate) the ML-BOM and the attestation bundle, bound by the run digest."""
     return {
         "note": "Referenced, not duplicated. Generate alongside the run; verify via the digest.",
         "run_report_digest": subject.get("digest", {}),
         "ml_bom": {"file": ML_BOM_JSON, "format": "CycloneDX ML-BOM"},
-        "attestation": {"file": ATTESTATION_JSON, "format": "provael-attestation/v1 (PEP 740)"},
+        "attestation": {"file": ATTESTATION_JSON, "format": STATEMENT_FORMAT},
     }
 
 
@@ -475,13 +482,14 @@ def _referenced_artifacts(subject: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------------------------
 
 def _annex_iii_pack(
-    report: RunReport, *, issued_at: str, commit: str,
+    artifact: ReportArtifact, *, issued_at: str, commit: str,
     mitigation: MitigationReport | None = None, decision: ReleaseDecision | None = None,
 ) -> dict[str, Any]:
     """The Machinery Annex III EHSR pack (legacy shape — hosted/machinery.py's public contract)."""
+    report = artifact.report
     stmt_dict: dict[str, Any] = json.loads(
         build_statement(
-            report, issued_at=issued_at, commit=commit, decision=decision
+            artifact, issued_at=issued_at, commit=commit, decision=decision
         ).model_dump_json()
     )
     tier = _run_transfer_tier(report)
@@ -637,14 +645,15 @@ def _risk_reduction_measures(mitigation: MitigationReport | None) -> dict[str, A
 
 
 def _annex_i_dossier(
-    report: RunReport, *, issued_at: str, commit: str, component: ComponentProfile | None,
+    artifact: ReportArtifact, *, issued_at: str, commit: str, component: ComponentProfile | None,
     include_crosswalk: bool = False, mitigation: MitigationReport | None = None,
     decision: ReleaseDecision | None = None,
 ) -> dict[str, Any]:
     """The Annex I Part A conformity-assessment evidence dossier (the rich shape)."""
+    report = artifact.report
     stmt_dict: dict[str, Any] = json.loads(
         build_statement(
-            report, issued_at=issued_at, commit=commit, decision=decision
+            artifact, issued_at=issued_at, commit=commit, decision=decision
         ).model_dump_json()
     )
     tier = _run_transfer_tier(report)
@@ -694,7 +703,7 @@ def _annex_i_dossier(
 
 
 def build_dossier(
-    report: RunReport,
+    report: RunReport | ReportArtifact,
     *,
     profile: CertifyProfile,
     issued_at: str,
@@ -707,7 +716,9 @@ def build_dossier(
     """Build the conformity-evidence dossier for ``profile`` (pure — no clock, no random).
 
     Args:
-        report: the run under assessment.
+        report: the run under assessment — the :class:`~provael.report.ReportArtifact` read from
+            its report.json, so the embedded statement binds that file's bytes (a bare report
+            binds the bytes this release would write for it).
         profile: which pack shape to emit (Annex I Part A dossier or the Annex III EHSR pack).
         issued_at: UTC ISO-8601 issuance timestamp (passed in, never read from a clock here).
         commit: the source commit the ruleset came from.
@@ -718,12 +729,13 @@ def build_dossier(
         decision: the release decision under a named protocol, or None for not assessed. It is
             the one embedded in the attestation statement, so the dossier carries no second one.
     """
+    artifact = ReportArtifact.of(report)
     if profile is CertifyProfile.annex_iii:
         return _annex_iii_pack(
-            report, issued_at=issued_at, commit=commit, mitigation=mitigation, decision=decision
+            artifact, issued_at=issued_at, commit=commit, mitigation=mitigation, decision=decision
         )
     return _annex_i_dossier(
-        report, issued_at=issued_at, commit=commit, component=component,
+        artifact, issued_at=issued_at, commit=commit, component=component,
         include_crosswalk=include_crosswalk, mitigation=mitigation, decision=decision,
     )
 
@@ -1049,7 +1061,7 @@ def to_dossier_html(dossier: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------------------------
 
 def write_dossier(
-    report: RunReport,
+    report: RunReport | ReportArtifact,
     out_dir: Path,
     *,
     profile: CertifyProfile,
@@ -1062,8 +1074,9 @@ def write_dossier(
 ) -> dict[str, Path]:
     """Write the dossier bundle (JSON + OSCAL + HTML) into ``out_dir``; return the paths."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    artifact = ReportArtifact.of(report)
     dossier = build_dossier(
-        report, profile=profile, issued_at=issued_at, commit=commit, component=component,
+        artifact, profile=profile, issued_at=issued_at, commit=commit, component=component,
         include_crosswalk=include_crosswalk, mitigation=mitigation, decision=decision,
     )
     json_path = out_dir / CERTIFY_JSON
@@ -1071,7 +1084,7 @@ def write_dossier(
     oscal_path = out_dir / CERTIFY_OSCAL_JSON
     oscal_path.write_text(
         to_dossier_oscal_json(
-            report, profile=profile, issued_at=issued_at, mitigation=mitigation,
+            artifact.report, profile=profile, issued_at=issued_at, mitigation=mitigation,
             decision=decision,
         )
         + "\n",

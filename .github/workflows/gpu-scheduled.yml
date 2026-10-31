@@ -116,7 +116,7 @@ jobs:
           fi
       - name: Mint the bot App token
         id: bot
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.PROVAEL_BOT_APP_ID }}
           private-key: ${{ secrets.PROVAEL_BOT_PRIVATE_KEY }}
@@ -133,15 +133,18 @@ jobs:
           # results/ to plan the slice, which needs the tree rather than the history.
           fetch-depth: 0
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
       # provael too, from THIS checkout: the driver reads the plan and selects shards through
       # provael.campaign. The container installs the pinned release separately, inside the image.
+      # modal is pinned, not `>=0.64`: a range installed whatever Modal had shipped that morning into
+      # a job that holds MODAL_TOKEN_*. A client Modal stops accepting fails at `modal run`, loudly;
+      # bump gpu-arm.yml and gpu-scheduled.yml together.
       - name: Install the Modal client and this checkout's provael
         run: |
-          pip install "modal>=0.64"
+          pip install "modal==1.5.5"
           pip install --quiet -e .
 
       # `set -o pipefail` is load-bearing, not hygiene. `modal run ... | tee` reports TEE's exit
@@ -354,7 +357,7 @@ jobs:
 
       - name: Upload the run artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gpu-scheduled-report
           path: gpu-scheduled-report.txt

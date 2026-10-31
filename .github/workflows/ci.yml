@@ -28,10 +28,10 @@ concurrency:
 #   package build + metadata ........ `build` (uv build + twine check)
 #   docs strict ..................... .github/workflows/docs.yml
 #   optional integration ............ gated (PROVAEL_INTEGRATION); skips here. The real-model path
-#                                     runs in gpu-scheduled.yml (scheduled, and only when the
-#                                     ENABLE_GPU_SCHEDULED repo variable is "true"), NOT as a release
-#                                     gate — release.yml re-runs this CPU gate plus a tag/version
-#                                     match, but it does not run the GPU integration tests.
+#                                     runs in gpu-scheduled.yml (dispatch only: its schedule is
+#                                     paused until the keep-out predicate is calibrated, #136), NOT
+#                                     as a release gate — release.yml re-runs this CPU gate plus a
+#                                     tag/version match, but it does not run the GPU integration tests.
 jobs:
   check:
     # The matrix value is in the name because GitHub renders a custom job name verbatim: without it
@@ -77,7 +77,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv (Python ${{ matrix.python-version }})
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -123,7 +123,7 @@ jobs:
       - name: Leaderboard staleness is declared, not implied
         run: uv run python scripts/check_leaderboard_staleness.py
 
-      # COVERAGE IS MEASURED AND PUBLISHED, not asserted. The repo had 90 test modules (122 now) and no
+      # COVERAGE IS MEASURED AND PUBLISHED, not asserted. The repo had 90 test modules and no
       # figure anywhere, which is exactly the shape of claim this project refuses to accept from
       # anyone else: "well tested" with no denominator.
       #
@@ -202,16 +202,18 @@ jobs:
       contents: read
       issues: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      # PyYAML from uv.lock, hash-checked, where `pip install pyyaml` took whatever PyPI served that
+      # minute. --no-install-project: the script needs PyYAML, not provael.
+      - run: uv sync --locked --no-dev --no-install-project
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/check_issue_labels.py
+        run: uv run --no-sync python scripts/check_issue_labels.py
 
   build:
     name: package build + metadata check
@@ -223,7 +225,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv (pinned Python 3.12)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
 
@@ -231,7 +233,7 @@ jobs:
         run: uv build
 
       - name: Check distribution metadata
-        run: uvx twine check dist/*
+        run: uvx twine==7.0.0 check dist/*
 
   audit:
     name: dependency vulnerability audit
@@ -243,7 +245,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv (pinned Python 3.12)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
 
@@ -264,7 +266,7 @@ jobs:
             --format requirements-txt -o audit-default.txt
           grep -qE '^pillow==' audit-default.txt \
             || { echo "::error::export produced no runtime deps — the audit would be vacuous"; exit 1; }
-          uvx pip-audit --strict --progress-spinner off -r audit-default.txt
+          uvx pip-audit==2.10.1 --strict --progress-spinner off -r audit-default.txt
 
       # The GPU extras are not what `pip install provael` resolves, and torch advisories routinely
       # have no fixed version, so this lane reports without gating. `lerobot` and `openpi` are
@@ -285,5 +287,18 @@ jobs:
           uv export --extra lerobot --extra openvla --extra attest --extra hosted \
             --no-emit-project --no-hashes --no-annotate --quiet \
             --format requirements-txt -o audit-extras.txt
-          uvx pip-audit --progress-spinner off -r audit-extras.txt \
+          uvx pip-audit==2.10.1 --progress-spinner off -r audit-extras.txt \
             --ignore-vuln GHSA-f7vj-73pm-m822
+
+      # The docs group is not what `pip install provael` resolves either: a dependency group never
+      # reaches the published metadata, and the docs toolchain never starts a tornado server. So
+      # this lane reports without gating too. `uv export` takes the default groups, so `dev` is in
+      # the gating lane above, but `docs` is not one: tornado 6.5.9 sat in the lock with three
+      # advisories (GHSA-r4j5-9xpp-3985 and two more, 28 October 2026, all fixed in 6.6) that no
+      # lane could see.
+      - name: Audit docs group (informational)
+        continue-on-error: true
+        run: |
+          uv export --only-group docs --no-emit-project --no-hashes --no-annotate --quiet \
+            --format requirements-txt -o audit-docs.txt
+          uvx pip-audit==2.10.1 --progress-spinner off -r audit-docs.txt

@@ -23,6 +23,13 @@ back is the framing that the deferral is pending: that is what turns a historica
 current claim. So the scan targets the stale framing, mirroring the forbidden-string list the
 website already enforces, and leaves the dates alone.
 
+THE SECOND DATE (E-2026-14). The Machinery Regulation applies from 20 January 2027 because the
+Corrigendum of 4 July 2023 (OJ L 169) corrected Article 54, and the EUR-Lex HTML of the act still
+prints the uncorrected text. A post from this project's LinkedIn page read that text on 12
+September 2026 and told readers the site's correct date was wrong. The site and the signed clock
+never moved; this pins the clock's date and bans stating an uncorrected Article 54 date as the one
+that applies. A historical quote of the corrigendum ("for X, read Y") is not that, and stays legal.
+
 Two exemptions, both deliberate:
 
 * ``CHANGELOG.md`` — historical entries legitimately record what was true at the time.
@@ -53,6 +60,21 @@ _SUPERSEDED_FRAMING: tuple[tuple[str, str], ...] = (
     (r"provisional \*{0,2}2028-08-02", "calls the adopted 2028 date provisional"),
     (r"proposed 2028-08-02", "calls the 2028 date proposed"),
     (r"treat 2027 as binding", "instructs the reader to plan against the superseded date"),
+)
+
+#: The Machinery Regulation's application date as corrected (Corrigendum, OJ L 169, 4.7.2023,
+#: item 10). E-2026-14.
+MACHINERY_APPLIES_FROM = "2027-01-20"
+
+#: Framing that states an uncorrected Article 54 date as the one that applies (items 10, 11 and 12
+#: of the corrigendum moved all three). Matched case-insensitively.
+_UNCORRECTED_MACHINERY: tuple[tuple[str, str], ...] = (
+    (
+        r"appl(?:y|ies|ied|ying)\s+(?:from\s+)?14 (?:January 202[47]|October 2023)",
+        "states an uncorrected Article 54 date as the one that applies",
+    ),
+    (r"not 20 January 2027", "calls the corrected application date wrong"),
+    (r"2027-01-14", "carries the uncorrected application date in ISO form"),
 )
 
 #: Files allowed to contain the superseded framing. Keep this short; a missing entry fails loudly,
@@ -99,21 +121,72 @@ def test_no_tracked_file_carries_the_superseded_framing() -> None:
     assert not offenders, "superseded AI Act framing found:\n  " + "\n  ".join(offenders)
 
 
-def test_every_restatement_of_the_date_agrees_with_the_clock() -> None:
-    """``hosted/report.py`` restates the date for the API surface; it cannot drift from the clock.
+def test_the_clock_names_the_corrected_machinery_date() -> None:
+    """The clock is what every signed attestation embeds, so its Machinery date is pinned here."""
+    machinery = {c.framework_id: c for c in REGULATORY_CLOCK}["eu-machinery"]
+    assert machinery.applies_from == MACHINERY_APPLIES_FROM
+    assert "OJ L 169" in machinery.note, "the corrigendum that fixed the date must be cited in-band"
 
-    A second copy is the whole problem this file exists for. It is kept rather than derived because
-    the hosted payload is a plain dict shipped without importing the attest module, but a copy that
-    nothing compares is a copy that will diverge.
+
+def test_no_tracked_file_states_an_uncorrected_machinery_date() -> None:
+    """E-2026-14: the uncorrected Article 54 must not come back as a current claim."""
+    offenders: list[str] = []
+    for path in _tracked_text_files():
+        rel = path.relative_to(REPO).as_posix()
+        if rel in _EXEMPT:
+            continue
+        body = path.read_text(encoding="utf-8")
+        for pattern, why in _UNCORRECTED_MACHINERY:
+            if re.search(pattern, body, re.I):
+                offenders.append(f"{rel}: {why} (matched {pattern!r})")
+    assert not offenders, "uncorrected Machinery Regulation date found:\n  " + "\n  ".join(offenders)
+
+
+def test_every_restatement_of_the_date_agrees_with_the_clock() -> None:
+    """``hosted/report.py``'s conformity rows read their dates from the clock; none is typed again.
+
+    This used to regex the typed copies, and said they could not be derived because the hosted
+    payload shipped without importing the attest module. It already imported it (for
+    ``build_statement``), and the ISO 10218 copy kept an unsourced day for as long as the clock did
+    (E-2026-17). The rows are derived now, so this checks the derived values and that no literal
+    date comes back into the file.
     """
+    from provael.hosted.report import CONFORMITY_MAPPING
+
+    clock = {c.framework_id: c for c in REGULATORY_CLOCK}
+    ai_act_rows = [row for row in CONFORMITY_MAPPING if "AI Act" in row["instrument"]]
+    assert ai_act_rows, "no AI Act row in CONFORMITY_MAPPING — has the shape changed?"
+    for row in ai_act_rows:
+        assert row["applies_from"] == AI_ACT_APPLIES_FROM == clock["eu-ai-act"].applies_from
+    iso_rows = [row for row in CONFORMITY_MAPPING if "ISO 10218" in row["instrument"]]
+    assert iso_rows, "no ISO 10218 row in CONFORMITY_MAPPING — has the shape changed?"
+    for row in iso_rows:
+        assert row["applies_from"] == clock["iso-10218"].applies_from
+        assert row["applies_from_precision"] == clock["iso-10218"].date_precision
     hosted = (REPO / "src/provael/hosted/report.py").read_text(encoding="utf-8")
-    ai_act_rows = re.findall(r'"instrument":\s*"([^"]*AI Act[^"]*)"[\s\S]{0,200}?"applies_from":\s*"([^"]+)"', hosted)
-    assert ai_act_rows, "no AI Act row found in hosted/report.py — has the shape changed?"
-    for instrument, applies_from in ai_act_rows:
-        assert applies_from == AI_ACT_APPLIES_FROM, (
-            f"hosted/report.py says {applies_from} for {instrument!r}, "
-            f"clock says {AI_ACT_APPLIES_FROM}"
-        )
+    assert not re.search(r'"applies_from":\s*"\d', hosted), (
+        "a conformity row types its date again; read it from the clock with _date()"
+    )
+
+
+def test_every_clock_date_is_written_at_the_precision_it_is_verified_to() -> None:
+    """A day is carried only where a source gives one (E-2026-17: ISO 10218 carried 1 April 2025).
+
+    The model refuses a date finer or coarser than its ``date_precision``; this pins that refusal
+    and the one entry whose source gives only a month.
+    """
+    from pydantic import ValidationError
+
+    from provael.attest import RegulatoryClock
+
+    iso = {c.framework_id: c for c in REGULATORY_CLOCK}["iso-10218"]
+    assert (iso.applies_from, iso.date_precision) == ("2025-02", "month")
+    assert "iso.org/standard/73933" in iso.source and "iso.org/standard/73934" in iso.source
+    assert iso.last_verified >= "2026-09-28"
+    for applies_from, precision in (("2025-02-05", "month"), ("2025-02", "day"), ("2025", "month")):
+        with pytest.raises(ValidationError, match="precision date"):
+            RegulatoryClock(framework_id="x", instrument="x", applies_from=applies_from,
+                            date_precision=precision, note="x")
 
 
 def test_the_scan_actually_reads_files() -> None:
@@ -123,7 +196,7 @@ def test_the_scan_actually_reads_files() -> None:
     assert any(f.name == "attest.py" for f in files)
 
 
-@pytest.mark.parametrize("pattern", [p for p, _ in _SUPERSEDED_FRAMING])
+@pytest.mark.parametrize("pattern", [p for p, _ in _SUPERSEDED_FRAMING + _UNCORRECTED_MACHINERY])
 def test_each_banned_pattern_compiles(pattern: str) -> None:
     """A pattern that does not compile silently bans nothing."""
     assert re.compile(pattern, re.I) is not None

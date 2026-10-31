@@ -20,8 +20,9 @@ benign control — a policy-layer failure no firmware patch addresses. Full writ
 
 **Is it only simulation?**
 Yes — Provael is a pre-deployment scanner. The literature says sim/edited-image red-teaming
-predicts real-robot brittleness well enough to be useful (Predictive Red Teaming, MAE < 0.19) —
-see [Sim predicts real](sim-predicts-real.md). Treat ASR as a floor on susceptibility, not a
+predicts real-robot brittleness well enough to be useful (Predictive Red Teaming reports "less than
+0.19 average difference between predicted and real success rates", on visuomotor diffusion
+policies rather than VLAs) — see [Sim predicts real](sim-predicts-real.md). Treat ASR as a floor on susceptibility, not a
 guarantee.
 
 **Do the stub numbers mean anything about real VLAs?**
@@ -35,8 +36,10 @@ and a benign-FPR control.
 [Python API](python-api.md).
 
 **Which simulators?**
-`stub` (scalar, CPU) and `reach` (spatial, CPU) ship pure-CPU; `libero` and `metaworld` wrap real
-simulators behind `[lerobot]`. More are on the [roadmap](roadmap.md).
+`stub` (scalar, CPU) and `reach` (spatial, CPU) ship pure-CPU; `libero` wraps a real simulator
+behind `[lerobot]`. `metaworld` wraps a second one (it also needs LeRobot's own `metaworld` extra)
+but is registered **scaffolding**: no benchmark has been run through it, and the CLI cannot
+complete a run on it. More are on the [roadmap](roadmap.md).
 
 **Are these real adversarial attacks?**
 They're templated, auditable perturbations — a screen, not gradient/search-optimised worst-case
