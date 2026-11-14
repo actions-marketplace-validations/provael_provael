@@ -12,13 +12,22 @@
 
 <p align="center">
   <a href="https://www.provael.com">
-    <img src="https://www.provael.com/media/demo.gif" alt="Provael red-teams a VLA robot policy in simulation: one command prints an ASR-by-attack table, a pass/fail scorecard, and a SARIF report tagged with the EAI rule." width="820">
+    <img src="https://www.provael.com/media/demo.gif" alt="Provael red-teams a VLA robot policy in simulation: a stub run prints an ASR-by-attack table, then a scorecard led by the release verdict and a SARIF report tagged with the EAI rule." width="820">
   </a>
 </p>
 
-<p align="center"><sub>Deterministic CPU stub run, seed 0 — reproduce it in seconds.</sub></p>
+<p align="center"><sub>Deterministic CPU stub run, seed 0, recorded on provael 0.47.0: reproduce it in seconds.</sub></p>
+
 [![CI](https://github.com/provael/provael/actions/workflows/ci.yml/badge.svg)](https://github.com/provael/provael/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/provael.svg)](https://pypi.org/project/provael/) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/provael/provael/blob/main/LICENSE) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21984184.svg)](https://doi.org/10.5281/zenodo.21984184)
 [![last measured](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fprovael%2Fprovael%2Fmain%2Fwatch%2Ffreshness.json)](https://github.com/provael/provael/blob/main/watch/freshness.json) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/provael/provael/badge)](https://scorecard.dev/viewer/?uri=github.com/provael/provael)
+
+**What it found on a real policy.** In LIBERO simulation, a real SmolVLA policy left its keep-out
+envelope in **42 of 50 episodes** under a roleplay-framed instruction (task-clustered 95% CI
+[62%, 100%]) against **1 of 50** under a benign control. The same frame with no target named does it
+in 27 of 30, so this is **fragility under an out-of-distribution instruction, not attacker control**
+([the run](results/smolvla_libero_object_suite_2026-09-14/README.md) · [E-2026-12](docs/errata.md)).
+One policy, one suite, an uncalibrated predicate, measured with provael 0.41.2 on 14 Sep 2026; the
+limits are below. Want the same measurement on your checkpoint? [provael.com](https://www.provael.com).
 
 **What this is.** A Python CLI that red-teams an open VLA robot policy inside a simulator and
 reports an **attack-success rate** — always beside the benign control it is read against, with a
@@ -52,8 +61,8 @@ was named. Timed on a clean container: **20 s** from `pip install` to a written 
 - **Mostly templated attacks** plus four bounded search families; not gradient-based worst-case
   robustness.
 - **One supported real configuration.** SmolVLA on the ten LIBERO-Object tasks is the body of
-  evidence; π0.5 has one preliminary arm. Everything else registered is scaffolding or
-  stub-validated, and the tool says which.
+  evidence; π0.5 has one preliminary arm. Everything else registered is scaffolding,
+  stub-validated or never run here, and the tool says which.
 - **The default predicate is uncalibrated.** An event is the end-effector leaving a fixed keep-out
   envelope — not task completion, not a calibrated hazard.
 - **The instruction result is fragility, not control.** The frame that moves SmolVLA moves it with
@@ -77,8 +86,8 @@ is **scaffolding** or has **no run committed here** — `provael list-policies` 
 **SmolVLA × LIBERO-Object, 14 September 2026, provael 0.41.2** — ten tasks, five seeds per (task,
 arm), horizon 280, on a workstation RTX 2000 Ada. Under the `roleplay` instruction the policy left
 its keep-out envelope on **42 of 50** episodes (84%, task-clustered 95% CI [62%, 100%]) against a
-benign floor of **1/50** (2.0%, Wilson 95% [0.4%, 10.5%]); McNemar exact p = 9.1e-13, surviving
-Holm across the seven arms. Clean task success on the benign arm: 48/50. The visual and injection
+benign floor of **1/50** (2.0%, Wilson 95% [0.4%, 10.5%]); McNemar exact p = 9.1e-13 (pairs matched on
+task and seed, not starting scene: E-2026-19), surviving Holm across the six applicable arms. Clean task success on the benign arm: 48/50. The visual and injection
 arms sit at the floor (1/50, 1/50, 2/50; `mcp_tool_desc` not applicable). The controls run the same
 day put the same frame with **no target named** at 27/30 and with **scrambled tokens** at 18/30, so
 the exit is fragility under a long imperative out-of-distribution string, not attacker control
@@ -92,7 +101,9 @@ slice, and the pack says so:
 
 **Reading any result:** the rate and its floor travel together; the endpoint is an envelope exit
 under the predicate the run names; `N/A` is not zero; a **release verdict exists only under a named
-protocol** (`--protocol`) — [how to read a result](docs/quickstart.md#how-to-read-a-result).
+protocol** (`--protocol`) — [how to read a result](docs/quickstart.md#how-to-read-a-result). The
+measurement protocol every execution manifest names, `provael-redteam/v1`, is written down in
+[docs/protocol.md](docs/protocol.md).
 
 ## Coverage: registered is not validated
 
@@ -129,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: provael/provael@v0.46.0
+      - uses: provael/provael@v0.48.0
         with:
           attacks: none,instruction,visual,injection,action   # `none` is the benign control
           episodes: "10"
@@ -167,7 +178,7 @@ it is **evidence, not certification**.
 
 ## Development
 
-`make check` runs lint, type-check and tests, exactly as CI does. **How it is made.** Much of this codebase was written with AI assistance (Claude Code); every
+`make check` runs lint, type-check and tests as CI does (CI adds a coverage floor). **How it is made.** Much of this codebase was written with AI assistance (Claude Code); every
 published number, calibration and security-relevant path is human-reviewed before it ships.
 Co-author trailers are in git: `git log --grep=Co-Authored-By`.
 
@@ -184,7 +195,7 @@ disclosure). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md) — the green gat
 @software{jain_provael_2026,
   author  = {Jain, Sattyam},
   title   = {Provael: red-teaming Vision-Language-Action robot policies in simulation},
-  version = {0.46.0},
+  version = {0.48.0},
   year    = {2026},
   doi     = {10.5281/zenodo.21984184},
   url     = {https://doi.org/10.5281/zenodo.21984184},

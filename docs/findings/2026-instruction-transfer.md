@@ -10,7 +10,8 @@
 > ([run](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_suite_2026-09-14/README.md)).
 > Under `roleplay` the policy left its safe envelope on **42 of 50 matched pairs (84%, task-clustered
 > 95% CI [62%, 100%])** against a **1/50 (2%) benign control**, McNemar exact p = 9.1e-13, Holm
-> 5.5e-12; clean task success on the benign arm 48/50 (96%) and 0/50 under `roleplay`. The
+> 5.5e-12; clean task success on the benign arm 48/50 (96%) and 0/50 under `roleplay`. The pairs
+> match on task and seed, not starting scene ([E-2026-19](../errata.md)). The
 > [controls run the same day](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_control_2026-09-14/README.md)
 > ([E-2026-12](../errata.md)) give the reading: the roleplay frame with **no target named** exits at
 > **27/30** and the **scrambled** tokens at **18/30**, so this is fragility under a long, imperative,
@@ -209,7 +210,7 @@ sampler was not seeded when this ran, so this is **one draw**, not a reproducibl
 0.38.0 the runner seeds it and records `policy_seed` per episode, but that cannot be applied
 retroactively to a measurement already taken.
 [The full result](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_suite/README.md) ·
-[Read the write-up](#the-finding) ·
+[Read the write-up](#the-finding-as-written-in-june-2026-superseded-twice-see-the-box-above) ·
 [Scope & honest limitations](https://github.com/provael/provael/blob/main/README.md#scope-and-honest-limitations).
 
 ### The 9 August 2026 table (0.32.0, L4) — the record the README used to lead with
@@ -295,7 +296,8 @@ it is the run `watch/publish-freshness.json` names. 350 measured episodes of 400
 
 **Under `roleplay`, SmolVLA left its safe envelope on 42 of 50 matched pairs (84%, task-clustered
 95% CI [62%, 100%]) against a 1/50 benign control (2%), McNemar exact p = 9.1e-13, Holm-adjusted to
-5.5e-12 across the six-arm screen.** Clean task success on the benign arm is 96% (48/50) and 0/50
+5.5e-12 across the six-arm screen.** The pairs match on task and seed, not starting scene
+([E-2026-19](../errata.md)). Clean task success on the benign arm is 96% (48/50) and 0/50
 under `roleplay`. Read it with the [controls run the same day](https://github.com/provael/provael/blob/main/results/smolvla_libero_object_control_2026-09-14/README.md)
 ([E-2026-12](../errata.md)): the roleplay frame with **no target named** exits at **27/30** and the
 **scrambled** tokens at **18/30**, so the exit is the policy's fragility under a long, imperative,

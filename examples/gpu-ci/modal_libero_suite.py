@@ -23,10 +23,12 @@ eighteen-name family list under a "19 families" label in README.md. The table be
     calibrate        10  x  1  x 20  x 1   =    200     6.3       ~$5     ~0.6 h sharded
                                                     hard ceiling ~$11.99 (10 x 1.5 h timeout)
     probe            10  x  8  x  3  x 1   =    240     7.6       ~$6.11  ~45 min sharded
-    control          10  x  4  x  5  x 1   =    200     6.3       ~$6.15   ~1.1 h sharded
+    control          10  x  6  x  5  x 1   =    300    13.7       ~$11     ~1.6 h sharded
+                                                    hard ceiling ~$20 (10 x 2.5 h timeout)
+    declarative      10  x  3  x  5  x 1   =    150     6.8       ~$5.47   ~0.8 h sharded
                                                     hard ceiling ~$12 (10 x 1.5 h timeout)
-    eai04-redirect   10  x  4  x  5  x 1   =    200     6.3       ~$6.2    ~1.1 h sharded
-                                                    hard ceiling ~$12 (10 x 1.5 h timeout)
+    eai04-redirect   10  x  6  x  5  x 1   =    300    13.7       ~$11     ~1.7 h sharded
+                                                    hard ceiling ~$20 (10 x 2.5 h timeout)
     full             10  x  8  x  5  x 1   =    400    15.4       $12.29   2.04 h sharded (RUN)
                                                     hard ceiling ~$20 (10 x 2.5 h timeout)
     whitebox-pilot    2  x 12  x  2  x 1   =     48     ~2.4     ~$2 +?    <=2.5 h sharded
@@ -39,8 +41,21 @@ eighteen-name family list under a "19 families" label in README.md. The table be
     `full`'s row is the reason to read projections sceptically — see below.
 
 `full`'s row is MEASURED, not projected — it ran, and its estimate was $10.17 against an actual
-$12.29, 21% low. `control`'s ~$6.15 is that measured $0.031/episode times 200, so it inherits the
-correction rather than repeating the optimism.
+$12.29, 21% low. `control`'s ~$11 scales the one Modal run of that stage (9 August, below:
+$7.30 for 200 episodes) to the 300 its six arms now make, so it inherits a measured pace rather
+than a projection's optimism; `eai04-redirect` names six arms too and is priced the same way.
+
+ONE MODAL RUN OF `control` IS COMMITTED, AND IT IS THE BASIS FOR `declarative`'s ROW. On 9 August
+2026 the stage ran four arms (`none`, `roleplay`, `benign_reword`, `nonsense_text`), 200 episodes,
+in 9.12 GPU-hours, ~$7.30, its slowest shard ~1.04 h (results/smolvla_libero_object_control): above
+its row, so its row still reads low. The stage has named six arms since `scrambled_text` and
+`roleplay_no_target` were registered on 14 September 2026, and those six have run only on a
+workstation (results/smolvla_libero_object_control_2026-09-14). At five seeds that is 30 episodes a
+shard, and at the 9 August pace the slowest shard would take ~1.56 h, past the 1.5 h timeout it
+had, so on 11 November 2026 its timeout moved to 2.5 h, and `eai04-redirect`'s with it (see the
+two stages). `declarative_text`, the control registered on 10 November
+2026, is therefore not in `control`. It has its own stage, `declarative`, whose row scales the 9
+August run's measured GPU-hours to 150 episodes: an estimate for an arm that has never run anywhere.
 
 STAGES WITH >1 TASK ARE SHARDED ONE TASK PER CONTAINER, which is why wall clock is a tenth of
 GPU-hours at identical cost. That is a survivability decision, not a speed one.
@@ -167,8 +182,21 @@ ATTACKS = "none,instruction,visual,injection"
 #: pushed registry, because the image was rebuilt from a layer that had resolved `@main` weeks
 #: earlier. That failure was loud. The same staleness on a code path that still RUNS is silent,
 #: and is exactly what happened to `calibrate`.
-PROVAEL_PIN = "0.46.0"
+PROVAEL_PIN = "0.48.0"
 PROVAEL = f"provael[lerobot]=={PROVAEL_PIN}"
+
+#: The newest provael RELEASE whose `attack` neither adds controls by itself nor takes
+#: `--no-controls`; both reached main after it. A past release, so it never needs updating. From
+#: 0.48.0 `provael attack` adds `none` and the `control` family to any run with an
+#: instruction-channel arm unless told not to, and every stage below is costed arm by arm, so the
+#: command passes `--no-controls` once PROVAEL_PIN is past this. A stage that wants the controls
+#: names them, as `control` does.
+LAST_RELEASE_WITHOUT_NO_CONTROLS = "0.47.0"
+
+
+def _release(version: str) -> tuple[int, ...]:
+    """``0.47.0`` as ``(0, 47, 0)``; the pin is an exact release (tests/test_gpu_image_pin.py)."""
+    return tuple(int(part) for part in version.split("."))
 
 
 def _pin_commit() -> str | None:
@@ -255,7 +283,8 @@ STAGES: dict[str, dict[str, str]] = {
     #
     # SIX SEEDS, ONE EPISODE EACH — not 5 seeds x 2 repeats, which costs the same and measures less.
     # `paired_by_attack` reduces a (task, seed) cell to "was this cell ever flagged" because repeats
-    # at one seed are the same initial state and not independent pairs. So repeats add ZERO McNemar
+    # at one seed are one cell and not independent pairs (not the same initial state on LIBERO,
+    # unless the run pins it: E-2026-19). So repeats add ZERO McNemar
     # pairs and zero power to the headline statistic; seeds add one pair each. Repeats are only
     # worth buying once something actually decomposes seed variance from policy stochasticity, and
     # nothing does yet.
@@ -379,8 +408,43 @@ STAGES: dict[str, dict[str, str]] = {
     #
     # Only a stage that carries the key passes `--pin-init-states` (see the command below), and the
     # plan step refuses this one while PROVAEL_PIN is a release whose `attack` has no such flag.
+    #
+    # THE CONTROLS ARE NAMED, NOT GIVEN AS THE `control` FAMILY, since 10 November 2026, when the
+    # family gained `declarative_text`: a registered control must not add work to a stage whose
+    # timeout is its printed ceiling. These four are what the family resolved to before that day.
+    #
+    # SIZING, re-done 11 November 2026: six arms x five seeds is 30 episodes a shard, and the one
+    # Modal run of this stage (9 August, four arms) ran at ~0.81 s/step after a 174 s setup. A shard
+    # whose every episode runs the 280-step horizon at that pace is 30 x 227 s + 174 s = ~6,980 s,
+    # past the 5,400 s it had, and a shard that overruns writes nothing. 9,000 s (2.5 h, `full`'s
+    # timeout) leaves ~29% over that worst case; the ceiling is 10 x 2.5 h x $0.7992 = ~$19.98
+    # against ~$11 expected (the 9 August $7.30 for 200 episodes, scaled to 300).
     "control": {
-        "tasks": ALL_TASKS, "attacks": "none,roleplay,control",
+        "tasks": ALL_TASKS,
+        "attacks": "none,roleplay,benign_reword,nonsense_text,scrambled_text,roleplay_no_target",
+        "seeds": "5", "episodes_per_seed": "1", "timeout": "9000",
+        "pin_init_states": "45",
+    },
+    # THE FIRST OF THE TWO ARMS ERRATUM E-2026-12 LEFT OPEN, OPT-IN. The 14 September controls
+    # showed the roleplay frame leaving the envelope with no target named and with its words
+    # scrambled; the erratum left open whether a fluent non-imperative sentence of the same length
+    # does too. `declarative_text` is that sentence (the shorter imperative it also named has no
+    # arm). It runs beside `none` and `roleplay` so every comparison it needs is internal to one
+    # report, on the same pinned scenes as `control` (init state 45 + seed), so the two stages'
+    # `none` and `roleplay` cells start from the same scenes.
+    #
+    # SIZING, scaled from the one Modal run of a control stage and labelled as an estimate: 10 tasks
+    # x 3 arms x 5 seeds = 150 episodes, 15 a shard. The 9 August `control` run took 9.12 GPU-hours
+    # for 200 episodes, so 150 is ~6.8 GPU-hours, ~$5.47. That run's reports hold 38,337 steps, so
+    # its pace was ~0.81 s/step after ten 174 s setups, and a shard whose every episode runs the
+    # 280-step horizon at that pace is 15 x 227 s + 174 s = ~3,580 s, inside the 5,400 s timeout.
+    # The ceiling is 10 x 1.5 h x $0.7992 = ~$11.99.
+    #
+    # DISPATCHABLE FROM 0.48.0. The image installs PROVAEL_PIN, and 0.47.0 had no `declarative_text`
+    # (its container would have stopped at `unknown attack or family` after billing its setup), so
+    # gpu-arm.yml offered this stage only once PROVAEL_PIN named 0.48.0, on 12 November 2026.
+    "declarative": {
+        "tasks": ALL_TASKS, "attacks": "none,roleplay,declarative_text",
         "seeds": "5", "episodes_per_seed": "1", "timeout": "5400",
         "pin_init_states": "45",
     },
@@ -418,9 +482,19 @@ STAGES: dict[str, dict[str, str]] = {
     # targeted_redirect arm searches, 5 of the 20 episodes in a shard, at most 64 extra policy
     # queries each — ~220 s, under 4% of the shard. THE CEILING IS THE NUMBER THAT MATTERS: it is
     # what ten hung containers bill regardless of what they were asked to do.
+    #
+    # THE CONTROLS ARE NAMED here too since 10 November 2026, for the reason `control` gives: these
+    # four are what the family resolved to that day. The sizing above was written for the first two;
+    # with all four a shard is 30 episodes, and on 11 November 2026 the timeout moved to 9,000 s for
+    # it: 30 x 280 x 0.81 s + a 174 s setup + the search's ~260 s is ~7,240 s at `control`'s
+    # 9 August pace, ~24% under the timeout, and the ceiling is 10 x 2.5 h x $0.7992 = ~$19.98.
     "eai04-redirect": {
-        "tasks": ALL_TASKS, "attacks": "none,optimized_instruction,control",
-        "seeds": "5", "episodes_per_seed": "1", "timeout": "5400",
+        "tasks": ALL_TASKS,
+        "attacks": (
+            "none,optimized_instruction,benign_reword,nonsense_text,scrambled_text,"
+            "roleplay_no_target"
+        ),
+        "seeds": "5", "episodes_per_seed": "1", "timeout": "9000",
         "query_budget": "64",
     },
     # THE TWO WHITE-BOX FAMILIES, ON THE REAL ADAPTER, AS A PILOT. Since 0.42.0 `LeRobotAdapter`
@@ -674,6 +748,10 @@ def redteam(stage: str, task: str | None = None) -> str:
     # release predates the flag.
     if "pin_init_states" in cfg:
         cmd += ["--pin-init-states", cfg["pin_init_states"]]
+    # A stage runs exactly the arms it names (see LAST_RELEASE_WITHOUT_NO_CONTROLS): the planned
+    # episode count printed below and the plan step's ceiling are both worked out from them.
+    if _release(PROVAEL_PIN) > _release(LAST_RELEASE_WITHOUT_NO_CONTROLS):
+        cmd += ["--no-controls"]
     # Say which stage the CONTAINER thinks it is running. The stage bug above was invisible
     # precisely because nothing in the output named the stage, so a wrong-stage run read as a
     # right one.

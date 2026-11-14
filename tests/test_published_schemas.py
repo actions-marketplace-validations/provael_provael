@@ -29,8 +29,8 @@ from provael.types import RunReport
 
 _ROOT = Path(__file__).resolve().parent.parent
 _SCHEMAS = _ROOT / "schemas"
-_REPORT_SCHEMA = _SCHEMAS / "report.v8.schema.json"
-_BOARD_SCHEMA = _SCHEMAS / "leaderboard.v6.schema.json"
+_REPORT_SCHEMA = _SCHEMAS / "report.v9.schema.json"
+_BOARD_SCHEMA = _SCHEMAS / "leaderboard.v7.schema.json"
 
 #: Schemas that a NEWER version has superseded. They stay committed and stay frozen: `$id` is a
 #: raw.githubusercontent URL on `main`, so deleting one 404s every consumer that pinned it, and
@@ -40,10 +40,12 @@ _BOARD_SCHEMA = _SCHEMAS / "leaderboard.v6.schema.json"
 #: (superseded schema, the current schema that replaced it, how to find its artifacts).
 _SUPERSEDED_SCHEMAS = (
     (_SCHEMAS / "leaderboard.v5.schema.json", "_BOARD_SCHEMA"),
+    (_SCHEMAS / "leaderboard.v6.schema.json", "_BOARD_SCHEMA"),
     (_SCHEMAS / "report.v4.schema.json", "_REPORT_SCHEMA"),
     (_SCHEMAS / "report.v5.schema.json", "_REPORT_SCHEMA"),
     (_SCHEMAS / "report.v6.schema.json", "_REPORT_SCHEMA"),
     (_SCHEMAS / "report.v7.schema.json", "_REPORT_SCHEMA"),
+    (_SCHEMAS / "report.v8.schema.json", "_REPORT_SCHEMA"),
 )
 
 

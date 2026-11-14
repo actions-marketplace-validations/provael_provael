@@ -11,8 +11,9 @@ declarative so a run can be reproduced from the config alone.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, field_validator, model_validator
 
 
 class RunConfig(BaseModel):
@@ -54,8 +55,9 @@ class RunConfig(BaseModel):
     episodes_per_seed: int = Field(
         1,
         ge=1,
-        description="Repeats at the SAME seed, i.e. the same initial state. Default 1 preserves "
-        "the original behaviour exactly.\n\n"
+        description="Repeats at the SAME seed. That is the same initial state only where the suite "
+        "picks the state from the seed; on LIBERO lerobot's reset counter picks it unless the run "
+        "pins it (E-2026-19). Default 1 preserves the original behaviour exactly.\n\n"
         "WHY THIS EXISTS. Until now `episodes` was the only knob and the runner did "
         "`seed = base + episode`, so an episode WAS a seed. That makes the per-(attack, seed) "
         "success rate 0 or 1 by construction, which means the seed-to-seed variance of a single "
@@ -80,7 +82,48 @@ class RunConfig(BaseModel):
         "such a list refuses a pin. Each episode records the state it loaded (`init_state`), so "
         "the report shows the scenes either way and RunReport carries no field for the pin.",
     )
+    init_states: dict[str, list[NonNegativeInt]] | None = Field(
+        None,
+        description="On a suite with a fixed list of initial states (LIBERO), the init-state "
+        "indices to start each task's episodes from, per task: one per seed (seed index i starts "
+        "from entry i, in every arm and repeat) or, in a run whose only arm is the benign "
+        "baseline, one per episode. A run with any other arm must name one state per seed, so "
+        "every arm at a seed starts from one scene. Exclusive with pin_init_states; the runner "
+        "checks the lists against the run's tasks, seeds and arms before anything runs.",
+    )
     horizon: int = Field(8, ge=1, description="Maximum timesteps per episode.")
+    termination: Literal["first-event", "fixed-horizon"] = Field(
+        "first-event",
+        description="'first-event' (the default, and every run before it existed) stops an "
+        "episode at its first envelope exit or at the suite's done, which on LIBERO is task "
+        "success. 'fixed-horizon' runs every episode to `horizon` in every arm: an exit and a "
+        "success both latch and the steps after them are still scored, so Succ-But-Unsafe and "
+        "the dwell behind risk exposure time become observable (E-2026-21). A suite that cannot "
+        "step past an event refuses it; the report records the mode (`termination_mode`).",
+    )
+    competence_check: int | None = Field(
+        None,
+        ge=1,
+        description="Run this many benign episodes per task before the arms, at the seeds after "
+        "the run's own, and refuse the adversarial arms on a task whose task success falls below "
+        "`competence_floor`: an attack rate on a policy that cannot do the task unattacked "
+        "measures nothing. The report records each task's pre-run and any refusal (`competence`); "
+        "the pre-run's episodes enter no rate. None (the default) runs no check.",
+    )
+    competence_floor: float = Field(
+        0.8,
+        ge=0.0,
+        le=1.0,
+        description="The task success a task's competence pre-run must reach for its adversarial "
+        "arms to run. Read only with `competence_check`.",
+    )
+    record_episode_errors: bool = Field(
+        False,
+        description="Record an exception from the simulator's step as an unjudged episode with "
+        "its reason (termination 'error') instead of stopping the run. Off by default. Every rate "
+        "excludes an unjudged episode and counts it beside the rate, so the run cannot shrink "
+        "silently; a failure in reset still stops the run.",
+    )
     defense: str | None = Field(
         None,
         description="Registered defense name applied as a pre-processing wrapper between the "
@@ -116,6 +159,25 @@ class RunConfig(BaseModel):
         if not v:
             raise ValueError("at least one attack (or attack family) must be specified")
         return v
+
+    @field_validator("init_states")
+    @classmethod
+    def _init_states_named(
+        cls, v: dict[str, list[int]] | None
+    ) -> dict[str, list[int]] | None:
+        if v is not None and (not v or any(not states for states in v.values())):
+            raise ValueError("init_states must name at least one state for every task it lists")
+        return v
+
+    @model_validator(mode="after")
+    def _one_scene_chooser(self) -> RunConfig:
+        """A pin and a named list both choose each episode's scene; a run takes one of them."""
+        if self.init_states is not None and self.pin_init_states is not None:
+            raise ValueError(
+                "init_states and pin_init_states both choose each episode's starting scene; "
+                "pass one of them"
+            )
+        return self
 
     @field_validator("accelerator")
     @classmethod

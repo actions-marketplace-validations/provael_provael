@@ -221,7 +221,7 @@ release (bundles bind `report.json`'s bytes and sign a KMS-sized record, the thr
 the contact/force predicate, the corrected regulatory clock); it re-measured nothing, so
 `measuredWith` still reads 0.41.2 and `releasesBehind` reads 4 against a window of 2. The campaign
 is still paused until the predicate is calibrated (target 24 October 2026, since missed; new target
-14 November 2026, #136), and the lane's pin moved to 0.45.0 with 0 of 80 banked.
+14 November 2026, also missed; new target 15 December 2026, #136), and the lane's pin moved to 0.45.0 with 0 of 80 banked.
 
 **Update, 21 October 2026: five behind, still `isStale: true`.** 0.46.0 is a hygiene release (the
 per-run significance column tests each attack against the control arm's own counts, E-2026-18;
@@ -230,6 +230,25 @@ re-measured nothing, so `measuredWith` still reads 0.41.2 and `releasesBehind` r
 window of 2. That count is minor releases: 0.42.1 was a patch, so six tags separate the two. The
 headline it describes is still uncalibrated, the campaign is still paused until the predicate is
 calibrated (#136), and the lane's pin moved to 0.46.0 with 0 of 80 banked.
+
+**Update, 7 November 2026: six behind, still `isStale: true`.** 0.47.0 carries what proof 1's
+re-run needs (each LIBERO episode records the init state its reset loaded, report schema 8;
+`provael calibrate --init-state-offset`; `provael attack --pin-init-states`; plan-step refusals that
+keep a fit and a scored run on different seeds and scenes); it re-measured nothing, so
+`measuredWith` still reads 0.41.2 and `releasesBehind` reads 6 against a window of 2. That count is
+minor releases: 0.42.1 was a patch, so seven tags separate the two. The headline it describes is
+still uncalibrated, the campaign is still paused until the predicate is calibrated (#136), and the
+lane's pin moved to 0.47.0 with 0 of 80 banked.
+
+**Update, 12 November 2026: seven behind, still `isStale: true`.** 0.48.0 carries report schema 9,
+which proof 1's re-run is to record (the policy's runtime identity, each episode's starting
+scene, ending and delivered inputs, every rate with its counts and interval, each task's
+predicate), with the controls run by default, a competence gate and paired and task-clustered
+intervals; it re-measured nothing, so `measuredWith` still reads 0.41.2 and
+`releasesBehind` reads 7 against a window of 2. That count is minor releases: 0.42.1 was a patch,
+so eight tags separate the two. The headline it describes is still uncalibrated, the campaign is
+still paused until the predicate is calibrated (#136), and the lane's pin moved to 0.48.0 with 0
+of 80 banked.
 
 ### What changed instead
 
@@ -261,3 +280,8 @@ It is not done, and it must not be. A stub run measures a fixture, not a policy.
 signal green with a run that re-measured nothing is the same category of error as rebuilding the
 board and calling it a measurement — the failure this page was written to prevent, wearing a
 different costume. The badge stays red until a real policy is re-measured.
+
+The same goes for a run recorded for a video. `results/rfm_submission_2026-11` holds real episodes
+on a real policy, with manifests dated 4 November 2026, and none of them refreshes this badge: a
+single-seed recording re-measures nothing the project publishes, so `provael.watch` skips any manifest
+whose `deviations` say "recorded for video", and it gets no row in the measurement ledger either.

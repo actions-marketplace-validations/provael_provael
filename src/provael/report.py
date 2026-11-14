@@ -26,15 +26,27 @@ from provael.calibration import describe_calibration, wilson_ci
 from provael.eai import CATALOG
 from provael.endpoints import PHYSICAL_HAZARD
 from provael.evidence import evidence_state_of
-from provael.scoring.asr import benign_control, endpoint_by_attack, fdr_by_attack
+from provael.scoring.asr import (
+    arm_episodes,
+    benign_control,
+    endpoint_by_attack,
+    fdr_by_attack,
+    report_rates,
+    semantic_role,
+)
 from provael.scoring.safety_cost import (
+    FIXED_HORIZON,
     QUADRANT_KEYS,
     TASK_SUCCESS_UNMEASURED,
+    UNSAFE_SUCCESS,
     cumulative_cost,
+    exposure_unobservable,
     quadrant_counts,
+    risk_exposure_time,
     unsafe_success_rate,
+    unsafe_success_unobservable,
 )
-from provael.types import ASRStat, RunReport
+from provael.types import ASRStat, RateStat, ReportRates, RunReport
 from provael.verdict import ReleaseDecision, acceptance_line, release_verdict
 
 REPORT_JSON = "report.json"
@@ -62,6 +74,23 @@ def _endpoint_cell(stat: ASRStat | None) -> str:
         f"{stat.successes}/{stat.attempts} ({100.0 * stat.asr:.1f}%) "
         f"[{100.0 * lo:.0f}–{100.0 * hi:.0f}%]"
     )
+
+
+def _interval_of(stat: RateStat | None) -> tuple[float, float] | None:
+    """A RateStat's interval as ``(low, high)``, or None for an N/A slice."""
+    if stat is None or stat.interval is None:
+        return None
+    return (stat.interval.low, stat.interval.high)
+
+
+def _unjudged_note(report: RunReport, stat: RateStat | None) -> str:
+    """`` · unjudged N`` beside a rate on a schema-9 report; nothing on an earlier one.
+
+    An earlier report recorded no verdict, so a 0 printed for it would be a claim nobody made.
+    """
+    if report.schema_version < 9 or stat is None:
+        return ""
+    return f" · unjudged {stat.n_unjudged}"
 
 
 def _fmt_ci(ci: tuple[float, float] | None) -> str:
@@ -150,14 +179,137 @@ class ReportArtifact:
         return hashlib.sha256(self.raw).hexdigest()
 
 
-def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> str:
+def _rate_cell(stat: RateStat | None, missing: str) -> str:
+    """``k/n (p%) [lo–hi%]`` for a RateStat, or ``missing`` where there is none or no trial."""
+    if stat is None or stat.rate is None:
+        return missing
+    return (
+        f"{stat.successes}/{stat.trials} ({100.0 * stat.rate:.1f}%) "
+        f"[{_fmt_ci(_interval_of(stat))}]"
+    )
+
+
+def ended_cell(terminations: dict[str, int] | None, schema_version: int) -> str:
+    """How an arm's episodes ended, as ``"horizon 3, task_success 2"``, or why it cannot say."""
+    if terminations is None:
+        return f"not recorded (report schema {schema_version}; recorded from schema 9)"
+    return ", ".join(f"{name} {count}" for name, count in terminations.items())
+
+
+def _per_arm_outcomes(report: RunReport, rates: ReportRates) -> list[str]:
+    """Per arm: task success, mean steps and how its episodes ended (P2.1).
+
+    An unsafe rate says how often an arm left the envelope and nothing about what the policy did
+    otherwise: an arm can sit at the floor because the policy stopped doing the task and ran out
+    the horizon. These three columns say which.
+    """
+    outcomes = arm_episodes(report.results)
+    roles = {r.attack: semantic_role(r) for r in report.results} | report.roles
+    lines = [
+        "## Task success and how episodes ended, per arm",
+        "",
+        "| attack | role | task success | mean steps | how episodes ended |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name in report.by_attack:
+        arm = outcomes.get(name)
+        role = roles.get(name, "adversarial-treatment")
+        if arm is None:
+            lines.append(f"| {name} | {role} | N/A | N/A | not applicable on this suite |")
+            continue
+        success = _rate_cell(
+            rates.task_success_by_attack.get(name), "N/A (no task-success signal)"
+        )
+        steps = f"{arm.mean_steps:.1f}" if arm.mean_steps is not None else "N/A"
+        ended = ended_cell(arm.terminations, report.schema_version)
+        lines.append(f"| {name} | {role} | {success} | {steps} | {ended} |")
+    lines += [
+        "",
+        "> Task success counts the episodes that carry the suite's task-success signal; mean "
+        "steps and how episodes ended count every applicable episode of the arm.",
+        "",
+    ]
+    return lines
+
+
+def _pp(value: float) -> str:
+    """A difference in percentage points with its sign, ``+82.0`` / ``-3.3`` / ``0.0``."""
+    points = round(100.0 * value, 1)
+    return "0.0" if points == 0 else f"{points:+.1f}"
+
+
+def _paired_difference_section(rates: ReportRates) -> list[str]:
+    """Each paired arm's rate minus the benign arm's, with Newcombe's paired interval (P2.4).
+
+    Two Wilson intervals side by side are not an interval for their difference, and the pairs are
+    paired: the McNemar test reads the same table, and this bounds what it tests.
+    """
+    if not rates.paired_difference:
+        return []
+    lines = [
+        "## Paired difference against the benign arm",
+        "",
+        "| attack | pairs (n) | discordant (b–c) | difference | 95% interval |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for name, diff in rates.paired_difference.items():
+        lines.append(
+            f"| {name} | {diff.pairs} | {diff.attack_only}–{diff.benign_only} | "
+            f"{_pp(diff.estimate)} pp | [{_pp(diff.interval.low)}, {_pp(diff.interval.high)}] pp |"
+        )
+    method = next(iter(rates.paired_difference.values())).interval.method
+    lines += [
+        "",
+        f"> Each arm's unsafe rate minus its benign twins' over the (task, seed) cells both ran, "
+        f"interval by `{method}` (Newcombe 1998, Statistics in Medicine 17:2635). The pairs share "
+        "a task and a seed, not necessarily a starting scene (E-2026-19); the intervals are not "
+        "adjusted for multiplicity.",
+        "",
+    ]
+    return lines
+
+
+def _competence_section(report: RunReport) -> list[str]:
+    """The competence pre-run, when the run asked for one (``--competence-check``, P2.2)."""
+    check = report.competence
+    if check is None:
+        return []
+    lines = [
+        "## Competence check",
+        "",
+        f"> {check.episodes_per_task} benign episode(s) per task ran before the arms, at seeds "
+        "after the run's own, with the run's defense in place and under its termination mode. "
+        f"A task whose task success fell below {100.0 * check.floor:.0f}% had its adversarial "
+        "arms refused; the benign arm and "
+        "the harmless-variation controls still ran on it. These episodes enter no rate.",
+        "",
+        "| task | task success (pre-run) | decision | arms refused |",
+        "| --- | --- | --- | --- |",
+    ]
+    for task, row in check.by_task.items():
+        decision = "admitted" if row.admitted else "**refused**"
+        refused = ", ".join(row.refused) or "—"
+        lines.append(
+            f"| {task} | {_rate_cell(row.task_success, 'N/A')} | {decision} | {refused} |"
+        )
+    lines.append("")
+    return lines
+
+
+def to_markdown(
+    report: RunReport, decision: ReleaseDecision | None = None, *, termination: str | None = None
+) -> str:
     """Render a report as a Markdown document.
 
     ``decision`` is the release decision the caller made (under a named protocol, or not assessed);
     it is derived here only when the caller has none, so this page, the scorecard, the SARIF and
-    the manifest of one run can never disagree about its verdict.
+    the manifest of one run can never disagree about its verdict. ``termination`` defaults to the
+    report's own ``termination_mode``, which decides whether Succ-But-Unsafe, CC and RET print as
+    N/A (E-2026-21): they do on a first-event run, exactly as before, and not on a fixed-horizon
+    one.
     """
     decision = decision if decision is not None else release_verdict(report)
+    termination = termination if termination is not None else report.termination_mode
     lines: list[str] = []
     lines.append("# Provael — VLA Red-Team Report")
     lines.append("")
@@ -174,6 +326,12 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
     lines.append(f"| tasks | {', '.join(f'`{t}`' for t in report.tasks)} |")
     lines.append(f"| episodes / pair | {report.episodes} |")
     lines.append(f"| horizon | {report.horizon} |")
+    if report.termination_mode == FIXED_HORIZON:
+        # Printed only for the new mode, so a first-event report renders exactly as it did.
+        lines.append(
+            "| episode termination | fixed horizon: every episode ran to the horizon, past its "
+            "first envelope exit and past task success |"
+        )
     lines.append(f"| base seed | {report.seed} |")
     if report.accelerator is not None or report.precision is not None:
         acc = report.accelerator or "unspecified"
@@ -181,12 +339,19 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
         lines.append(f"| accelerator / precision | `{acc}` / `{prec}` |")
     adv_rate, adv_s, adv_n = report.adversarial_headline()
     adv_pct = "N/A" if adv_n == 0 else f"{100.0 * adv_rate:.1f}%"
-    adv_ci = wilson_ci(adv_s, adv_n) if adv_n else None
-    lines.append(f"| **adversarial ASR** (benign excluded) | **{adv_pct} ({adv_s}/{adv_n})** |")
+    # Every interval comes from the one resolver (P1.6); on a schema-9 report each rate also says
+    # how many unjudged episodes it left out, beside it.
+    rates = report_rates(report)
+    adv_ci = _interval_of(rates.adversarial)
+    lines.append(
+        f"| **adversarial ASR** (benign excluded) | **{adv_pct} ({adv_s}/{adv_n})**"
+        f"{_unjudged_note(report, rates.adversarial)} |"
+    )
     lines.append(f"| adversarial ASR 95% CI (Wilson, episode-level) | {_fmt_ci(adv_ci)} |")
     lines.append(
         f"| all-episode observed-unsafe (benign incl.) | "
-        f"{100.0 * report.asr:.1f}% ({report.successes}/{report.attempts}) |"
+        f"{100.0 * report.asr:.1f}% ({report.successes}/{report.attempts})"
+        f"{_unjudged_note(report, rates.all_episodes)} |"
     )
     lines.append(f"| all-episode 95% CI (Wilson, episode-level) | {_fmt_ci(report.ci95)} |")
     lines.append(f"| all-episode anytime-valid CI | {_fmt_ci(report.anytime_ci)} |")
@@ -203,7 +368,7 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
         counts = f" ({benign.successes}/{benign.attempts})" if benign.attempts else ""
         lines.append(
             f"| **benign baseline FPR** (the ASR's control arm) | "
-            f"**{100.0 * benign.rate:.1f}%{counts}** |"
+            f"**{100.0 * benign.rate:.1f}%{counts}**{_unjudged_note(report, benign.stat)} |"
         )
         lines.append(
             "| benign FPR 95% CI (Wilson) | "
@@ -217,8 +382,19 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
         )
     if report.matched_benign_fpr is not None:
         lines.append(f"| matched-benign FPR | {100.0 * report.matched_benign_fpr:.1f}% |")
-    if report.succ_but_unsafe is not None:
+    sbu_why = unsafe_success_unobservable(report.suite, termination)
+    has_task_signal = any(r.task_success is not None for r in report.results)
+    if sbu_why is not None and (report.succ_but_unsafe is not None or has_task_signal):
+        lines.append(f"| Succ-But-Unsafe | N/A ({sbu_why}) |")
+    elif report.succ_but_unsafe is not None:
         lines.append(f"| Succ-But-Unsafe | {100.0 * report.succ_but_unsafe:.1f}% |")
+    if report.schema_version >= 9:
+        # Schema 9 records how each episode ended and whether it was judged. Printed only there:
+        # an earlier report recorded neither, and a 0 printed for it would be a claim nobody made.
+        lines.append(
+            f"| unjudged episodes (excluded from every rate above) | {unjudged_count(report)} |"
+        )
+        lines.append(f"| how episodes ended | {termination_mix(report)} |")
     lines.append("")
     reasons = " ".join(r if r.endswith(".") else f"{r}." for r in decision.reasons)
     lines.append(f"> **Release decision.** {reasons}")
@@ -284,6 +460,9 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
             "rather than zero."
         )
     lines.append("")
+    lines += _per_arm_outcomes(report, rates)
+    lines += _paired_difference_section(rates)
+    lines += _competence_section(report)
     fdr = fdr_by_attack(report)
     if fdr:
         lines.append("## Significance (Benjamini-Hochberg FDR)")
@@ -318,21 +497,33 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
         lines.append("")
         lines.append("| metric | value |")
         lines.append("| --- | --- |")
-        cc_cell = (
-            "N/A (no per-step decision log)" if cc is None
-            else f"{cc:.2f} unsafe steps/episode"
-        )
+        exposure_why = exposure_unobservable(report.suite, termination)
+        exposures = [
+            ret for ret in (risk_exposure_time(r) for r in report.results if r.scored)
+            if ret is not None
+        ]
+        if cc is None:
+            cc_cell = ret_cell = "N/A (no per-step decision log)"
+        elif exposure_why is not None:
+            cc_cell = ret_cell = f"N/A ({exposure_why})"
+        else:
+            cc_cell = f"{cc:.2f} unsafe steps/episode"
+            ret_cell = f"{sum(exposures)} unsafe steps over {len(exposures)} episodes"
         lines.append(f"| cumulative cost (CC counterpart) | {cc_cell} |")
-        usr_cell = (
-            "N/A (this suite surfaces no task-success signal)" if usr is None
-            else f"{100.0 * usr:.1f}%"
-        )
+        lines.append(f"| risk exposure time (RET counterpart) | {ret_cell} |")
+        if usr is None:
+            usr_cell = "N/A (this suite surfaces no task-success signal)"
+        elif sbu_why is not None:
+            usr_cell = f"N/A ({sbu_why})"
+        else:
+            usr_cell = f"{100.0 * usr:.1f}%"
         lines.append(f"| unsafe success rate (USR) | {usr_cell} |")
         lines.append("")
         lines.append("| quadrant | episodes |")
         lines.append("| --- | --- |")
         for key in QUADRANT_KEYS:
-            lines.append(f"| {key.replace('_', ' ')} | {quadrant[key]} |")
+            count = f"N/A ({sbu_why})" if key == UNSAFE_SUCCESS and sbu_why else quadrant[key]
+            lines.append(f"| {key.replace('_', ' ')} | {count} |")
         lines.append("")
         if quadrant[TASK_SUCCESS_UNMEASURED]:
             lines.append(
@@ -344,11 +535,14 @@ def to_markdown(report: RunReport, decision: ReleaseDecision | None = None) -> s
             lines.append("")
     lines.append("## ASR by task")
     lines.append("")
-    lines.append("| task | ASR | successes | attempts |")
-    lines.append("| --- | --- | --- | --- |")
+    # Clean task success beside each task's rate (P2.2): a task the policy cannot do unattacked
+    # has no task to lose under an attack, whatever its rate says.
+    lines.append("| task | ASR | successes | attempts | clean task success (benign arm) |")
+    lines.append("| --- | --- | --- | --- | --- |")
     for name, stat in report.by_task.items():
         a, asr, s, n = _stat_row(name, stat)
-        lines.append(f"| {a} | {asr} | {s} | {n} |")
+        clean = _rate_cell(rates.clean_task_success_by_task.get(name), "N/A")
+        lines.append(f"| {a} | {asr} | {s} | {n} | {clean} |")
     lines.append("")
     lines.append("## Sample adversarial instructions")
     lines.append("")
@@ -431,16 +625,43 @@ def benign_control_text(report: RunReport) -> str:
     return text
 
 
+def unjudged_count(report: RunReport) -> int:
+    """Applicable episodes that every rate excluded because they were not judged (schema 9)."""
+    return sum(1 for r in report.results if r.applicable and not r.scored)
+
+
+def termination_mix(report: RunReport) -> str:
+    """How the episodes ended, as ``"horizon 3, task_success 2"`` (schema 9), or "not recorded"."""
+    counts: dict[str, int] = {}
+    for result in report.results:
+        if result.termination is not None:
+            counts[result.termination] = counts.get(result.termination, 0) + 1
+    return ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "not recorded"
+
+
 def render_summary(report: RunReport, console: Console | None = None) -> None:
     """Print the ASR table and the headline ASR line to ``console`` (or a fresh one)."""
     console = console or Console()
     console.print(build_summary_table(report))
     console.print(f"[bold]{report.headline()}[/bold]")
+    if report.schema_version >= 9:
+        # Beside the headline, as garak#2136 asked of the main report line: what the rate left out.
+        console.print(
+            f"unjudged: {unjudged_count(report)} episode(s), excluded from every rate · ended: "
+            f"{termination_mix(report)}"
+        )
     if report.clean_task_success_rate is not None:
         console.print(
             "clean-task-success (benign control): "
             f"{100.0 * report.clean_task_success_rate:.1f}% — the unattacked task-completion rate "
             "the ASR is read against"
+        )
+    if report.competence is not None:
+        refused = [t for t, row in report.competence.by_task.items() if not row.admitted]
+        console.print(
+            f"competence check: {len(refused)} of {len(report.competence.by_task)} task(s) below "
+            f"the {100.0 * report.competence.floor:.0f}% floor, adversarial arms refused"
+            + (f" on {', '.join(refused)}" if refused else "")
         )
     benign = benign_control(report)
     fpr = "n/a" if benign is None else benign_control_text(report)
@@ -457,6 +678,7 @@ __all__ = [
     "REPORT_JSON",
     "ReportArtifact",
     "benign_control_text",
+    "ended_cell",
     "REPORT_MD",
     "report_json_bytes",
     "report_json_path",
@@ -466,4 +688,6 @@ __all__ = [
     "load_report",
     "build_summary_table",
     "render_summary",
+    "termination_mix",
+    "unjudged_count",
 ]

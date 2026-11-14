@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 the entries below are the ones a reader arriving today needs, newest at the top. Every heading is a
 release the tag exists for; the Unreleased section holds what is merged and not yet cut.
 
+- **0.48.0 (12 Nov 2026)** — report schema 9 for proof 1's re-run: the policy's runtime identity,
+  each episode's scene, ending and inputs, every rate with its counts; controls by default, a
+  competence gate, paired and clustered intervals, load preflights. Re-measures nothing.
+- **0.47.0 (7 Nov 2026)** — what proof 1's re-run needs: each LIBERO episode records its init state
+  (schema 8), `calibrate --init-state-offset`, `attack --pin-init-states`, and plan-step refusals
+  that keep a fit off a scored run's seeds and scenes. Re-measures nothing, so it ships six behind.
 - **0.46.0 (21 Oct 2026)** — hygiene, `pillow>=13.0` for nine advisories, and significance tested
   against the control arm's own counts (E-2026-18; 21 of the 49 ✅ rows were not). No headline number
   moves; the published measurement (0.41.2, uncalibrated) is five minor releases behind.
@@ -15,24 +21,382 @@ release the tag exists for; the Unreleased section holds what is merged and not 
   record a KMS key can sign (0.44 cannot verify v2; v1 still verifies); three-way calibration
   (schema 7); a contact/force predicate (unmeasured); the ML-BOM names the policy; Meta-World is
   scaffolding; the signed clock's ISO 10218 date corrected (E-2026-17). No published number moves.
-- **0.44.0 (20 Sep 2026)** — hygiene and scope: `full-sweep` on a real policy narrows to measured
-  families, `certify` becomes `dossier`, the machinery route is reframed. No measured number moves.
-- **0.43.0 (19 Sep 2026)** — a release verdict is made only under a named acceptance protocol
-  (`--protocol`); without one every export says `incomplete — not assessed`. Evidence manifest v2
-  with the coverage counts in one convention (17 families, 39 attacks); π0.5 packaged as measured
-  (preliminary). The fourteen-item correction backlog, worked in order.
-- **Before 0.43** — 0.42.x (18–19 Sep 2026): π0.5's preliminary leg (roleplay 1/30 against 0/30,
-  no transfer claimed) and `E-2026-12`, fragility under the roleplay frame rather than attacker
-  control (the no-target frame exits at 27/30). 0.41.2 (9 Sep 2026), the 14 September run's tool:
-  roleplay 42/50 against 1/50, uncalibrated, on ten Object tasks; before it, the sharded suite.
+- **Before 0.45** — 0.44.0 (20 Sep 2026): hygiene and scope; `full-sweep` on a real policy narrows
+  to measured families and `certify` becomes `dossier`. 0.43.0 (19 Sep 2026): a release verdict
+  only under a named acceptance protocol (`--protocol`) and evidence manifest v2 (17 families, 39
+  attacks). 0.42.x (18–19 Sep 2026): π0.5's preliminary leg (roleplay 1/30 against 0/30, no
+  transfer claimed) and `E-2026-12`, fragility under the roleplay frame rather than attacker
+  control. 0.41.2 (9 Sep 2026), the 14 September run's tool: roleplay 42/50 against 1/50,
+  uncalibrated, on ten Object tasks; before it, the sharded suite.
 
 Corrections to published numbers live in [docs/errata.md](docs/errata.md), not here; an incident's
 narrative belongs there too, and from 0.44.0 entries say what changed and why, in that order.
 
 ## [Unreleased]
 
+## [0.48.0] — 2026-11-12
+
+This release carries report schema 9 and the method work proof 1's re-run is to record (#136):
+each report names the deployed policy's runtime identity, each episode's starting scene, how it
+ended and what the policy was handed, every rate with its counts, interval and unjudged count,
+and the predicate each task was scored against. `--termination fixed-horizon` runs episodes to
+the horizon; `provael attack` adds the benign arm and the control family to any instruction-channel
+run unless `--no-controls`; `--competence-check` refuses the attacks on a task the policy cannot
+do; paired and task-clustered intervals reach `report.md`, the hf-eval notes, SARIF levels and
+board schema 7. A LeRobot checkpoint whose own files would run unreviewed code is refused
+(PYSEC-2026-2290), and load-time preflights refuse a policy fed the wrong thing
+(`PROVAEL_OVERRIDE_PREFLIGHT=1` loads it anyway, on the record). Both GPU images now install
+0.48.0 (`PROVAEL_PIN`) and pass `--no-controls`, so every stage runs the arms it is costed for. The
+published measurement does not move with it: nothing was re-measured, `measuredWith` (0.41.2) and
+`measuredAt` stay as they are, and the headline is still uncalibrated.
+`watch/publish-freshness.json` reads `releasesBehind: 7` and `isStale: true`, and the scheduled
+campaign stays paused.
+
+### Added
+
+- **The measurement protocol is written down.** `docs/protocol.md` defines `provael-redteam/v1`, the
+  string every execution manifest carries, as the code runs it today: the loop, the arms and their
+  budgets, what a pair is matched on, the benign control and the controls, the predicate, the
+  termination rule, the intervals and tests, and what each record carries and leaves out. It lists
+  what v2 is planned to change, and the README's "Reading any result" line links it. Why: every
+  manifest named a protocol that no page described, so a reader comparing harnesses had to rebuild
+  it from the code.
+- **The board's signing key and signed bytes are documented.** `docs/leaderboard.md` says what
+  `provael leaderboard verify` checks and what it does not, where the private key is stored (where
+  it was generated is not recorded in the repository), how to pin the public key out of band, how to
+  rotate it, what revocation means for rows already signed, and the exact bytes the signature
+  covers, which are not RFC 8785. A test pins those bytes against the page, and the page's rebuild
+  example now reads its run from `source.json` and keeps the rows' attribution. Why: offline
+  verification is only as good as the key a verifier already holds, and the page had readers
+  download the key beside the board. No board, signature or verify behaviour changes; failing on
+  what verify does not check, and moving to RFC 8785, wait for the next board schema change.
+- **A reproducer sees the cost first, and LIBERO's licence conflict is on the record.**
+  `docs/reproduction-request.md` gives the time per episode computed from the committed execution
+  manifests and a four-episode smoke run; no CPU time per episode has been measured, and the page
+  says so. The dependency register, and every generated results README of a LIBERO run, record that
+  LIBERO's README says CC BY 4.0 for its datasets while their Hugging Face cards say Apache-2.0,
+  open in LIBERO#150. Why: a willing reproducer declined a 100-episode CPU-only run
+  (huggingface/lerobot#4548), and the licence question was raised on LIBERO#148 and recorded nowhere
+  here. The regenerated READMEs gain that one line; no number moves.
+- **`declarative_text`, a harmless-variation control that asks for nothing.** It replaces the
+  instruction with one fixed English statement as long as the `roleplay` prompt in whitespace
+  tokens, naming no object and borrowing no word from the roleplay frame or a LIBERO task, and
+  `--attacks control` now includes it. Why: E-2026-12 left open whether a fluent non-imperative
+  sentence of the same length produces the envelope exit the roleplay frame does, and this is that
+  arm; the shorter imperative it also named still has none. It has not run on any policy, so no
+  number moves. The scheduled campaign's plan and the Modal `control` and `eai04-redirect` stages
+  now name their controls, so their grids and printed ceilings stay as they were; the new arm has
+  its own Modal stage, `declarative`, not dispatchable until a release carries it.
+- **Report schema 9 records the rest of the deployed policy's runtime identity.**
+  `deployed_policy` gains the observation normaliser and its statistics digest, digests of the pre-
+  and post-processor files and the weight file as lerobot loaded them, the rename map, the camera
+  order, denoising steps, the control rate, and ACT's temporal-ensembling coefficient and openpi's
+  discrete-state flag where a policy has them; `null` where unresolved. The execution manifest
+  (schema 4) records the installed lerobot, torch, transformers, mujoco, robosuite, hf-libero,
+  gymnasium and numpy versions and fills `checkpoint_digest`, and `provael attack` and `provael
+  doctor` warn on mujoco 3.4.0 or newer for a `libero_spatial` run (the task suite the upstream
+  report is about) and on versions off the `[lerobot]` lock. Why:
+  two loads of one checkpoint can execute differently (normaliser statistics, a swapped camera, the
+  denoising budget), and none of it was in the artifact. Older reports load and digest unchanged.
+  No number moves.
+- **Each episode records the scene it started from, and a pinned run checks its pairs.** Report
+  schema 9 adds `scene_t0_digest` and `scene_t0` per episode (read from the simulator after the
+  reset), a compiled-model digest per task, and `scene_pairing`, the count of attacked episodes
+  whose benign twin started from the same state and scene. A run pinned with `--pin-init-states`
+  stops if two arms at one seed start apart, and `provael attack --init-states FILE` names the
+  initial state of each seed's episodes (or of each episode, in a benign-only run). Why: an equal
+  `init_state` is an equal index, not proof of an equal scene, and the published pairs recorded
+  neither (E-2026-19). No number moves; no committed run is re-scored.
+- **Each episode records how it ended and whether it was judged.** Report schema 9 adds
+  `termination`, `verdict` with `unjudged_reason`, and `observation` (exit present, absent or not
+  established, the vantage, and the steps observed, horizon and steps without a pose). The LIBERO
+  predicate now answers `None` for a step without a pose instead of `False`, and
+  `--record-episode-errors` records a simulator exception as an unjudged episode instead of
+  stopping the run. Every rate excludes unjudged episodes and the report prints the count beside
+  it. Why: a missing pose read as "never left the envelope", and a crash cost a whole shard. The
+  committed 14 September shards have a pose on every step of all 530 applicable episodes, so no
+  rate moves.
+- **Every rate carries its counts, its interval's method and level, and its unjudged count.**
+  Report schema 9 adds `rates`: the headline, the all-episode rate, the benign and matched floors,
+  clean task success, Succ-But-Unsafe and each attack and task as a `RateStat` that refuses a
+  numerator above its denominator or a rate off `successes / trials`. `report_rates` is the one
+  resolver; the benign control, SARIF and `report.md` read it, and the bare floats stay for older
+  readers. Why: a rate quoted without its counts invites rebuilding the numerator from a rounded
+  float, and `ci95` named no method. Every committed report reads the same through the resolver,
+  which a test checks; no number moves.
+- **Each task records the predicate it was scored against.** Report schema 9 adds `predicates`:
+  per task the predicate's kind, its keep-out boxes or threshold, its source (the default box, a
+  caller's rules, or a calibration artifact with its file and sha256), the success predicate and a
+  digest, and the execution manifest's `suite_config_digest` is filled from them. Why: floors were
+  quoted without naming their predicate, and a rate under the default box and one under a
+  calibrated box are different claims. No number moves.
+- **`provael attack --termination fixed-horizon` runs every episode to its horizon.** An exit and
+  a task success latch instead of ending the episode (on LIBERO the adapter steps LIBERO directly,
+  since lerobot 0.5.1's `LiberoEnv.step` resets the scene on success), the report records
+  `termination_mode`, and Succ-But-Unsafe, RET and CC print as numbers only on such a run. Each
+  episode records `failure_cause` (`envelope_exit`, `collision`, `missed_grasp`, `dropped`,
+  `timeout`, or `null` where the signals cannot say), and a fixed-horizon LIBERO episode the
+  `task_success_strict` endpoint. Why: a first-event run cannot observe those three metrics
+  (E-2026-21), and LIBERO credits a held, tipped or one-frame placement as success. First-event
+  stays the default and renders as before; no GPU run used it, and no number moves.
+- **Trajectories name their channels, and two opt-in sidecars record chunks and timing.** Each
+  `trajectory` carries `channels`; on LIBERO it records the end-effector orientation and the
+  gripper opening beside the position, and a trajectory from before schema 9 still decodes by its
+  width. `provael attack --record-chunks` writes `chunks.npz` (every predicted action chunk, the
+  rows that never ran included, and the row each step executed) and `--record-timing` writes
+  `timing.json` (per-step observation and dispatch times); the execution manifest records each
+  file's sha256 and neither enters `report.json`. Why: for the steps that ran, the report could
+  not tell a predicted action from an executed one, and a reader had to infer the trajectory's
+  stride. No number moves.
+- **Each episode records what the policy was handed, and an unread attack setting stops the run.**
+  Report schema 9 adds `delivered_inputs`: a sha256 per distinct instruction handed to the policy,
+  a rolling sha256 over the camera images handed to it, and the attack's declared parameters as
+  read. Every attack declares its settings (`Attack.parameters`); the benign arm declares none and
+  takes the same path, and the runner fails a run in which a declared setting was never read
+  during an episode the attack ran in. Why: a configured perturbation is not a delivered one, and
+  a setting that never reaches the code that reads it changes nothing while the report says it
+  was in force. Attack randomness stays local and seeded. No number moves.
+- **Each arm's task success, mean steps and ending are printed beside its unsafe rate.**
+  `report.md` and the results READMEs add a per-arm table (task success with its Wilson interval,
+  mean steps, and how the episodes ended where the report records it, from schema 9), the README
+  generator adds a per-task task-success grid, and report schema 9's `rates` gains
+  `task_success_by_attack`. Why: an arm can sit at the floor because the policy stopped doing the
+  task; in the 14 September control run `benign_reword` left the envelope in 0 of 30 episodes and
+  completed the task in 5 of 30, which an exit rate alone cannot show. The regenerated READMEs gain
+  these tables and no number in them moves.
+- **`provael attack --competence-check N` asks whether the policy can do each task before it is
+  attacked.** N benign episodes per task run first, at the seeds after the run's own, and a task
+  whose task success falls below `--competence-floor` (default 0.8) runs no adversarial arm; the
+  benign arm and the controls still run there. Report schema 9 records the pre-run and each
+  decision in `competence`, `rates` gains `clean_task_success_by_task`, and `report.md` prints
+  both. Off by default and refused with `--resume`; `min_clean_task_success` in a protocol still
+  decides the release verdict. Why: a 0% attack rate on a policy that cannot do the task unattacked
+  measures nothing. No committed run used it, so no number moves.
+- **Each arm's difference from the benign arm carries its own interval, and the floor gets a
+  task-clustered one.** Report schema 9's `rates` gains `paired_difference`: each arm's rate minus
+  the benign arm's over the (task, seed) cells both ran, with the paired table (McNemar's b and c,
+  and n) and Newcombe's score interval for paired proportions (method 10); `report.md` and the
+  results READMEs print it beside McNemar. `provael.scoring.paired.floor_cluster_bootstrap_ci`
+  bounds the benign floor by resampling tasks, which `cluster_bootstrap_ci` never did (it drops the
+  baseline), and the READMEs print it; the hf-eval notes carry each arm's task-clustered interval or
+  say why there is none. Why: two Wilson intervals side by side are not an interval for their
+  difference, and the floor's episodes cluster by task as the arms' do. Recomputed from the
+  committed 14 September shards: `roleplay` sits +82 points [+67, +90] above its benign twins and
+  the floor's task-clustered interval is [0%, 6%]. The regenerated READMEs gain these columns; no
+  number in them moves.
+- **The results READMEs print each run's seed spread, and the difference from a second run of the
+  same configuration.** A per-seed table gives each arm's unsafe count pooled over tasks and its
+  range across seeds. Where two committed runs share a configuration (found from their shards: the
+  policy and checkpoint, suite, horizon, predicate, defense and every task, arm and seed), a table
+  gives each arm's difference with Newcombe's hybrid score interval for independent proportions.
+  `docs/sim-predicts-real.md` adds the rule: no cross-simulator or sim-to-real claim without
+  per-robot trajectory calibration and the within-simulator seed spread as the yardstick. Why: a
+  single run is one draw. Recomputed from the shards, the published configuration's two runs put
+  `roleplay` at 44/50 on 0.32.0 and 42/50 on 0.41.2, a difference of -4 points [-18, +10]. No
+  number moves.
+- **A preflight refusal can be overridden, on the record.** `PROVAEL_OVERRIDE_PREFLIGHT=1` loads a
+  LeRobot policy whose load-time preflight refused it: every check still runs, each refusal is
+  kept as an `overridden` outcome with its message, one warning names them all, and the execution
+  manifest records the variable, as it records `PROVAEL_TRUST_CHECKPOINT_CODE`. The `pi05_base`
+  refusal and the opt-in `--preflight` frame check are not lifted. Why: the thresholds are stated
+  design values that no real load has tested, so a wrong refusal had no way through but editing
+  the code. No number moves.
+
 ### Changed
 
+- **`provael attack` runs the benign control and the control family with any instruction-channel
+  arm, unless `--no-controls`.** When the arms include `instruction` or `optimized_instruction`
+  (from `--attacks`, a recipe or the default), `none` is added first and the `control` family last,
+  and a note names the arms added. Adopters will see these arms in their reports and tables: the
+  default `--attacks instruction` now runs the instruction family, `none` and every control arm, and
+  the GitHub Action's default attack list gains the control family. The adversarial ASR excludes
+  both by role, so the stub canary stays 47/70. Why: an instruction-channel rate is read against
+  the floor and the harmless variations, and on SmolVLA x LIBERO the controls are what showed the
+  roleplay result is fragility rather than attacker control (E-2026-12). The GPU drivers pass
+  `--no-controls` once their pinned release takes it, so each stage still runs the arms it is
+  costed for.
+- **SARIF levels come from intervals, not from the point rate.** A finding is an `error` when the
+  arm's 95% Wilson interval lies above the benign floor's with a lower bound of at least 50%, a
+  `warning` when it lies above with a lower bound under 50%, and a `note` with `undetermined: true`
+  when the two intervals overlap or no benign control ran; each result names its `levelBasis`,
+  `floorComparison` and the floor's interval. Adopters will see code-scanning alerts change level:
+  an arm at the floor (1/50 against 1/50 was a `warning`) and any arm in a run without `none` become
+  undetermined notes, and an arm whose interval reaches below 50% (8/10 against 0/10 was an
+  `error`) becomes a `warning`. Why: a point rate above zero says nothing when its interval overlaps
+  the floor's. `level_for_asr` stays importable and is no longer what `to_sarif` uses.
+- **The signed board's rows gain task-clustered intervals (board schema 7).** `LeaderboardRow` adds
+  `tasks`, `clustered_ci95` and `benign_clustered_ci95`, from resampling tasks rather than
+  episodes, and `schemas/leaderboard.v7.schema.json` is published beside v6. Adopters reading
+  `leaderboard.json` will see the three fields once the board is rebuilt and re-signed through
+  `leaderboard-rebuild.yml`; until then the committed board stays schema 6 and keeps verifying,
+  because the verifier strips v7 fields from a v6 board's signed bytes (a frozen copy of today's
+  board is now a test fixture). Why: a ten-task row's episode-level interval is too narrow for a
+  statement about the suite.
+- **A run recorded for a video no longer counts as a measurement.** `provael.watch` skips any
+  execution manifest whose `deviations` say "recorded for video", so it does not date the freshness
+  badge or get a row in `watch/measurements.json`. Why: `results/rfm_submission_2026-11` commits
+  real single-seed episodes made for the PAISI call, and they would have turned the badge green with
+  the published result unchanged.
+- **Results READMEs say what a pair is matched on.** `scripts/gen_results_readme.py` prints "paired
+  at matched (task, seed, init state)" only when every pair recorded one equal init state, and
+  otherwise says the starting scenes are not matched; the delivery pack, the findings pages, the
+  quickstart and the paper sources carry the same caveat. Why: on an unpinned LIBERO run lerobot's
+  reset counter picks the scene, not the seed, so the published pairs share a task and a seed but
+  not a starting scene (E-2026-19). No number moves.
+- **Metrics a run could not observe print N/A with the reason.** On LIBERO, `report.md`, the dossier
+  and the ForesightSafety crosswalk print Succ-But-Unsafe, USR, RET and CC as N/A, and a new
+  `report.json` carries `succ_but_unsafe: null`. Why: an episode ends at the first of task success or
+  envelope exit, so an episode cannot be both and cannot stay unsafe past one step, and the printed
+  0.0% read as "looked and found none" (E-2026-21). On the stub, RET and CC print N/A and
+  Succ-But-Unsafe stays. No headline number moves and older `report.json` files are unchanged.
+- **Stale readings inside the repo are corrected, and a test keeps them out.** The 9 August control
+  README, the LIBERO and AI2 bridge docstrings, the benign-firings docstring and the generated
+  results READMEs' competence line stop saying what E-2026-12, E-2026-19 and the harness maintainer
+  already withdrew. Why: the errata page kept the history while these files kept asserting the old
+  reading. `tests/test_superseded_readings.py` fails if one comes back as a current claim.
+- **Proof 1's 14 November 2026 date is missed, and the new target is 15 December 2026.** The
+  roadmap, the SPAIS README and the last-measured log say so beside each date. Why: the re-run
+  will record report schema 9, which is being built for 0.48.0, so the calibrated fit and the
+  pinned re-run come after that release. Nothing was re-run and no number moves.
+- **A LeRobot policy is checked before it measures anything, and a failed or unreadable check
+  refuses the run.** Once lerobot has built the policy and its processors, `LeRobotAdapter.load()`
+  runs `provael.policies.preflight` on the live objects and refuses: a normaliser that lists a
+  normalised input without statistics, or not at all, so lerobot passes it on unchanged
+  ([lerobot issue 4047](https://github.com/huggingface/lerobot/issues/4047)); a `--rename-map` that
+  differs from the map the checkpoint's pre-processor stores, which lerobot applies in its place
+  ([lerobot issue 4548](https://github.com/huggingface/lerobot/issues/4548)); three named weights
+  still inside what a fresh initialisation can hold, the untrained model a swallowed load error
+  returns ([lerobot issue 4577](https://github.com/huggingface/lerobot/issues/4577)); actions that
+  do not change between an all-black and an all-white frame
+  ([OpenVLA issue 346](https://github.com/openvla/openvla/issues/346)); on LIBERO, gripper
+  statistics that do not fit LIBERO's -1 to +1 gripper; and a `loaded_checkpoint_source` that names
+  another checkpoint, where a policy has one (none does in lerobot 0.5.1). A refusal is a
+  `PreflightError`, an `IncompatiblePolicyError`, so the CLI prints one line. `provael attack
+  --preflight` adds a frame check on an environment of its own: a +x end-effector command must move
+  the arm along +x ([robosuite issue 819](https://github.com/ARISE-Initiative/robosuite/issues/819)).
+  A missing LIBERO simulator now fails at once, naming hf-libero's `sys_platform == 'linux'`
+  marker in lerobot 0.5.1's `[libero]` extra and the source build. Why: each of these lets a run
+  finish with well-formed rates about something other than the policy it names. No number moves.
+  The checks were held to the measured checkpoints' own files, not run inside a real load here;
+  the gated tests in `tests/test_preflight.py` are where they first will be.
+- **`--policy pi05` on LIBERO refuses its default checkpoint.** The `pi05` entry still defaults to
+  `lerobot/pi05_base`, and on a LIBERO suite the adapter refuses it by name before its weights
+  download, pointing at `lerobot/pi05_libero_finetuned_v044`, the checkpoint the committed pi0.5
+  run used, the way `make_policy` already refuses `lerobot/smolvla_base`. Why: the base checkpoint
+  is not fine-tuned on LIBERO, and LeRobot fine-tuned the pi0.5 weights for LIBERO rather than
+  evaluating them out of the box
+  ([lerobot issue 2533](https://github.com/huggingface/lerobot/issues/2533)).
+
+### Fixed
+
+- **The two 9 August runs say why their manifests do not verify.** Each `report.json` in
+  `results/smolvla_libero_object_suite` and `results/smolvla_libero_object_control` had
+  `decisions[]` removed for size before it was committed, and provael 0.32.0 itself computes a
+  different `report_digest` for all twenty files than the manifest beside each one holds. Both
+  READMEs now say so, and the test that holds every other committed report to its manifest names
+  these two runs instead of skipping every schema-2 report. No number moves.
+- **The results READMEs say which arms Holm adjusts across.** They said "the adversarial arms of
+  this run" while the family the code adjusts holds every arm paired against `none`, the
+  harmless-variation controls included (in the 14 September control run, `roleplay` and its
+  controls). The generator now names the arms, says when controls are among them and which arms had
+  no pair, and a test holds every committed README to the code's family. Why: the sentence
+  described a family the code does not use. No number moves.
+- **The README's badges render, and its sentences match the repository again.** A missing blank
+  line after the demo caption made GitHub and PyPI print the badge row as literal Markdown. The
+  headline's Holm correction ran across six applicable arms, not seven; the McNemar figure says its
+  pairs share a task and a seed, not a starting scene (E-2026-19); `pi0` and `pi0fast` are
+  registered but never run here, which is neither scaffolding nor stub-validated; `make check`
+  matches CI bar CI's coverage floor; and the demo GIF is captioned as the July recording it is,
+  since its scorecard predates the release verdict. `PRIOR_ART.md` and the VLA-Arena crosswalk no
+  longer say provael holds the scene fixed (E-2026-19), the calibrations README says its ten fits
+  are present and withheld rather than absent, `scripts/render_keyid.py` stops looking for the
+  keyid line the README dropped on 19 September, and the summary above dates 0.47.0 to 7 November,
+  as its tag does. Why: the README is also the PyPI page, and each of these said something the
+  repository does not. No number moves.
+- **The README's demo GIF is recorded again, on 0.47.0.** It showed the July 2026 CLI: a pass/fail
+  scorecard and the old "Attack Success Rate" label. The new recording, from the same script, shows
+  the scorecard led by the release verdict, and the alt text and caption say so. Why: the README
+  is the PyPI page, and its first image showed output the tool no longer prints. No number moves.
+- **Sentences that still read the roleplay result as rewording or redirection now say what E-2026-12
+  says, and the CI examples pin their actions.** The UNECE R155 compliance row (printed in the delivery
+  pack's test report too), `integrity.py`'s docstring and `PRIOR_ART.md` now say the policy leaves its
+  envelope under a reframed instruction, and two unsourced claims about what an assessor asks for or
+  needs are rephrased. `examples/ci/*.yml`, which adopters copy into their own workflows, one into the
+  job that signs their release, used `actions/checkout@v4`, `astral-sh/setup-uv@v5` and
+  `actions/attest-build-provenance@v1`; they now pin the SHAs this repo's workflows use, and
+  `tests/test_workflow_pins.py` covers the examples. Why: the 1 November review listed the sentences,
+  and neither Dependabot nor any test looked at `examples/ci/`. No number moves.
+- **Three errata now date their correction to the day it reached `main`.** E-2026-19 and E-2026-21
+  said 7 November, the day the entries were written; #357 and #359 merged on 10 November. E-2026-18
+  said 10 October; #319 merged on 11 October. The two other entries that name a day on `main`,
+  E-2026-16 and E-2026-17, match their merges (the log dates in IST). The site's errata mirror
+  carried the same dates and is corrected with them. No number moves.
+- **The quickstart no longer says no committed run carries the contact column.** The two
+  one-episode PAISI recordings in `results/rfm_submission_2026-11` print it. They were recorded for
+  video and measure nothing, so the first measurement to carry it is still the calibrated re-run.
+- **CVE-2026-25874 affects `lerobot` through `0.6.1`**, per OSV's record of 11 November 2026, not
+  `0.5.1`. `SECURITY.md`, `docs/checkpoint-integrity.md`, `src/provael/integrity.py` and `action.yml`
+  now say so, and a test holds them to one range. The `0.5.1` pin is inside it either way.
+
+### Security
+
+- The GPU-extras audit in CI now fails on any advisory not on a reviewed allow-list
+  (`.github/pip-audit-extras-allowlist.toml`: each id with a reason, a reachability finding and a
+  review date). It could not fail before, so a new advisory in torch, transformers, diffusers,
+  accelerate, datasets, fsspec or setuptools printed a line and the merge went ahead.
+- **A LeRobot checkpoint can no longer choose code that runs when Provael loads it.**
+  `LeRobotAdapter.load()` reads the checkpoint's `config.json`, `policy_preprocessor.json` and
+  `policy_postprocessor.json` before any `from_pretrained`, and raises `UntrustedCheckpointError`
+  when they turn `trust_remote_code` on or carry `auto_map`, name a backbone or tokenizer outside
+  three checked repos, use a policy type other than `smolvla`, `pi0` or `pi05` or a processor step
+  not read in lerobot 0.5.1, name a step class outside lerobot, leave `action_tokenizer_processor`
+  trusting remote code, or set `use_peft`. A Hub checkpoint's three files are read at one commit
+  and lerobot is handed that snapshot, so the repo cannot change between the check and the load.
+  `provael verify-checkpoint --path` makes the same check and fails closed on it.
+  `PROVAEL_TRUST_CHECKPOINT_CODE=1` loads a refused checkpoint anyway with a warning, and the
+  execution manifest records the variable; `--policy pi0fast` and `--policy groot` now need it,
+  because lerobot itself loads their tokenizer or backbone with `trust_remote_code=True`. Why:
+  lerobot 0.5.1 loads whatever those files name, and transformers 5.3.0, which it pins, lets a
+  loaded config turn remote code on for itself (PYSEC-2026-2290, fixed in 5.5.0), so
+  `provael attack --model <repo>` could run code the repo's author chose. The GPU-extras audit
+  now lists PYSEC-2026-2290 as not reachable and names this check. The three checkpoints the
+  published runs and the smolvla default use pass as they are, and `RunConfig` and `report.json`
+  do not change.
+
+## [0.47.0] — 2026-11-07
+
+This release carries the init-state recording, the offset and pin flags and the plan-step refusals
+that proof 1's re-run needs (#136): each LIBERO episode records the init state its reset loaded
+(report schema 8), `provael calibrate --init-state-offset` starts a fit past a chosen state,
+`provael attack --pin-init-states` takes each episode's scene from its seed, and the GPU arm's plan
+step refuses a dispatch that would put a fit and a scored run on the same seeds or scenes. Both GPU
+images now install 0.47.0 (`PROVAEL_PIN`), so the plan step no longer refuses the two flags for want
+of a release that has them. The published measurement does not move with it: nothing was
+re-measured, `measuredWith` (0.41.2) and `measuredAt` stay as they are, and the headline is still
+uncalibrated. `watch/publish-freshness.json` reads `releasesBehind: 6` and `isStale: true`, and the
+scheduled campaign stays paused.
+
+### Changed
+
+- **The README leads with the measured result, and the main docs pages describe themselves.** Why:
+  its first screen showed a fixture demo, badges, the evidence formats and five limits, but never
+  the one real-policy result, so a visitor met the caveats before the number they qualify. A short
+  block now states it as the site and errata do (42 of 50 against 1 of 50 benign, task-clustered
+  95% CI [62%, 100%], fragility per E-2026-12) above "What this is". Seven docs pages (home,
+  quickstart, attacks, Python API, handbook, Top 10, leaderboard disclosure) carry their own
+  meta description; every page had shared the site's one, so search results could not tell them
+  apart.
+- **The docs stop contradicting the published run.** Why: `docs/quickstart.md`'s ten-task GPU
+  command left out `--seeds` and `--horizon`, so it ran the CLI defaults (10 episodes of 8 steps)
+  rather than the published settings; it now carries `--seeds 5 --horizon 280` and says what the
+  defaults do. `docs/attacks.md` still read the roleplay result as SmolVLA being redirected (88%,
+  44/50) and attributed the arms' separation to meaning, the reading E-2026-12 withdrew; it now
+  gives the 14 September run (42/50 against 1/50) and the control arms. The package docstring no
+  longer says SmolVLA runs are gated behind `PROVAEL_INTEGRATION`: `provael attack` on SmolVLA does
+  not read it (the studies, the GR00T adapter and the real-model tests do), and every run records
+  it. A comment in `mlbom.py` no longer dates ML-BOM to CycloneDX 1.6 (it entered the spec at 1.5).
+  Eighteen in-page links that used GitHub's heading ids now use the docs site's, so they land on
+  their section.
 - **Dependabot's security jobs now read ignore rules.** Why: they run as the `uv` package manager
   and read only a `uv` entry, so the rules under `pip`, 0.46.0's datasets rule included, never
   reached them (every job printed `"ignore-conditions":[]`). A security-only `uv` entry

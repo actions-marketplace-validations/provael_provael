@@ -26,8 +26,9 @@ reported too, as :attr:`TaskFiring` counts, but as description rather than infer
 
 WHAT THIS DELIBERATELY DOES NOT DO. It does not propose a corrected zone. Locating a boundary
 error is not the same as knowing where the boundary belongs, and the second needs the benign
-end-effector poses — which no committed LIBERO report carries (they all predate report schema 3;
-see :class:`provael.types.Trajectory`). Emitting a zone from this evidence would be picking a
+end-effector poses. The 14 September 2026 suite and control shards carry them (report schema 5, a
+:class:`provael.types.Trajectory` on every applicable episode, 80 of them benign), and
+:mod:`provael.workspace` reads them. Emitting a zone from this firing evidence would be picking a
 constant and calling it a calibration, which is the original bug.
 """
 
@@ -127,7 +128,7 @@ def firings_of(report: RunReport, run: str) -> list[Firing]:
             task_success=bool(r.task_success),
         )
         for r in report.results
-        if r.applicable and r.family == BENIGN_FAMILY and r.success
+        if r.scored and r.family == BENIGN_FAMILY and r.success
     ]
 
 
@@ -169,7 +170,7 @@ def build_study(reports: Iterable[tuple[str, RunReport]]) -> BenignFiringStudy:
             att += n
             firings.extend(firings_of(report, name))
             for r in report.results:
-                if r.applicable and r.family == BENIGN_FAMILY:
+                if r.scored and r.family == BENIGN_FAMILY:
                     task_att[r.task] += 1
                     if r.success:
                         task_succ[r.task] += 1

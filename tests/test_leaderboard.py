@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from provael.attest import generate_private_key_pem, public_key_pem
+from provael.attest import canonical_json, generate_private_key_pem, public_key_pem
 from provael.cli import app
 from provael.config import RunConfig
 from provael.leaderboard import (
@@ -29,7 +29,7 @@ from provael.leaderboard import (
     to_json,
     verify_leaderboard,
 )
-from provael.report import write_report
+from provael.report import load_report, write_report
 from provael.runner import run
 from provael.types import RunReport
 
@@ -288,6 +288,12 @@ _BOARD = Path(__file__).resolve().parent.parent / "leaderboard" / "results" / "l
 #: cannot prove the code once emitted something different.
 _V5_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v5-signed.json"
 _V5_FIXTURE_PUB = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v5-signed.pub"
+#: The board as committed on 10 November 2026: schema 6, signed, the last before the task-clustered
+#: intervals (schema 7). Frozen for the same reason as the v5 fixture: the live board is re-signed
+#: as v7 after this change merges, and then nothing else in the repo would prove a v6 board still
+#: verifies. Never re-generate this file.
+_V6_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v6-signed.json"
+_V6_FIXTURE_PUB = Path(__file__).resolve().parent / "fixtures" / "leaderboard-v6-signed.pub"
 _BOARD_PUB = _BOARD.with_suffix(".pub")
 
 
@@ -633,3 +639,81 @@ def test_the_staleness_gate_fails_on_undeclared_staleness_only() -> None:
         assert problems and "stale=None" in problems[0]
     finally:
         undeclared.unlink()
+
+
+#: The bytes `docs/leaderboard.md` says a board is signed over, one value at a time. RFC 8785 would
+#: give `1`, `1e-7`, `18446744073709552000` and a UTF-8 `é` for the same four values.
+_CANONICAL_VECTORS: dict[str, tuple[object, str]] = {
+    "non-ASCII text": ("café", '"caf\\u00e9"'),
+    "1.0": (1.0, "1.0"),
+    "1e-7": (1e-7, "1e-07"),
+    "2**64": (2**64, "18446744073709551616"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_CANONICAL_VECTORS))
+def test_the_signed_bytes_are_python_json_and_the_docs_print_them(name: str) -> None:
+    """A board is signed over `canonical_json`, and the docs print what that is, value for value.
+
+    It is `json.dumps(sort_keys=True, separators=(",", ":"))` with ASCII escapes, which is not
+    RFC 8785. A verifier who reaches for a JCS library serialises the same board to other bytes and
+    gets INVALID, so `docs/leaderboard.md` tabulates the difference, and this holds the page and the
+    function to the same values. Moving to RFC 8785 re-signs every board, so it waits for a board
+    schema change and moves this table, the docs table and the signature's algorithm label together.
+    """
+    value, expected = _CANONICAL_VECTORS[name]
+    assert canonical_json({"v": value}) == f'{{"v":{expected}}}'.encode("ascii")
+    page = (Path(__file__).resolve().parent.parent / "docs" / "leaderboard.md").read_text(
+        encoding="utf-8"
+    )
+    assert f"`{expected}`" in page, f"docs/leaderboard.md no longer prints the {name} vector"
+
+
+# ---------------------------------------------------------------------------------------------
+# Schema 7: task-clustered intervals on the rate and the floor (P2.4).
+# ---------------------------------------------------------------------------------------------
+
+
+def test_a_v6_board_still_verifies_and_signs_over_no_v7_field() -> None:
+    """The board committed today is v6; the v7 model must keep verifying it byte for byte."""
+    import json as _json
+
+    from provael.leaderboard import _ROW_FIELDS_ADDED_IN, _signing_payload
+
+    board = load_leaderboard(_V6_FIXTURE)
+    assert board.schema_version == 6, "the v6 fixture is no longer v6 — do not regenerate it"
+    assert verify_leaderboard(board, _V6_FIXTURE_PUB.read_bytes())
+    payload = _json.loads(_signing_payload(board))
+    for row in payload["rows"]:
+        for name in _ROW_FIELDS_ADDED_IN[7]:
+            assert name not in row, f"{name} leaked into a v6 board's signed bytes"
+
+
+def test_v7_rows_carry_the_task_clustered_intervals_of_the_rate_and_the_floor() -> None:
+    """The 14 September shards: ten tasks, so each row's clustered interval is defined."""
+    from provael.scoring.paired import floor_cluster_bootstrap_ci, task_bootstrap_ci
+
+    run_dir = Path(__file__).resolve().parents[1] / "results" / "smolvla_libero_object_suite_2026-09-14"
+    reports = [load_report(p.parent) for p in sorted(run_dir.glob("*/report.json"))]
+    board = aggregate(reports)
+    assert board.schema_version == 7
+    rows = {r.family: r for r in board.rows}
+    instruction = rows["instruction"]
+    assert instruction.tasks == 10
+    by_task: dict[str, list[bool]] = {}
+    for report in reports:
+        for r in report.results:
+            if r.scored and r.family == "instruction":
+                by_task.setdefault(r.task, []).append(r.success)
+    assert instruction.clustered_ci95 == task_bootstrap_ci(by_task)
+    floor = floor_cluster_bootstrap_ci([r for rep in reports for r in rep.results])
+    assert floor == (0.0, 0.06)  # the benign floor, 1/50, resampled by task
+    assert all(row.benign_clustered_ci95 == floor for row in board.rows)
+    assert rows["baseline"].clustered_ci95 == floor
+
+
+def test_a_one_task_row_declines_the_clustered_interval() -> None:
+    board = aggregate([run(RunConfig(attacks=["none", "instruction"], episodes=4, seed=0))])
+    for row in board.rows:
+        assert row.tasks == 1
+        assert row.clustered_ci95 is None and row.benign_clustered_ci95 is None

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from pathlib import Path
@@ -13,6 +14,7 @@ import typer
 from pydantic import ValidationError
 from rich.markup import escape
 
+from provael.attacks.registry import INSTRUCTION_CHANNEL_FAMILIES, attack_names, with_controls
 from provael.calibration import load_calibrations
 from provael.cli._shared import (
     OutputFormat,
@@ -35,16 +37,63 @@ from provael.coverage import FIXTURE_POLICIES
 from provael.mlbom import ML_BOM_JSON, write_ml_bom
 from provael.oscal import OSCAL_JSON, write_oscal
 from provael.policies.lerobot_adapter import IncompatiblePolicyError, MissingLeRobotError
+from provael.policies.registry import REQUIRES_LEROBOT
 from provael.recipes import FULL_SWEEP, fixture_only_families, full_sweep_attacks, load_recipe
 from provael.report import (
     render_summary,
     write_report,
 )
 from provael.reproductions import get_reproduction
-from provael.runner import run
+from provael.runner import (
+    CompetenceCheckError,
+    InitStatePlanError,
+    ResumeModeError,
+    ScenePinError,
+    UnreadParameterError,
+    run,
+)
+from provael.runtime_versions import drift_warnings, installed_versions
 from provael.sarif import write_sarif
 from provael.scorecard import SCORECARD_MD, write_scorecard
+from provael.sidecars import (
+    CHUNKS_NPZ,
+    TIMING_JSON,
+    ChunkLog,
+    TimingLog,
+    write_chunks,
+    write_timing,
+)
+from provael.suites.libero import suite_and_ids_from_tasks
 from provael.verdict import write_decision
+
+
+def _add_controls(overrides: dict[str, object], base: dict[str, object]) -> None:
+    """Add the benign control and the control family to an instruction-channel run, and say so.
+
+    Reads the attack list the run will use (an explicit ``--attacks``, else the recipe's, else
+    :class:`~provael.config.RunConfig`'s default) and writes the extended list into ``overrides``
+    only when :func:`~provael.attacks.registry.with_controls` changed it, naming every arm it added
+    on stderr so the run's shape is never a surprise. A list that is not a list of names is left
+    for the configuration's own validation to refuse.
+    """
+    current = overrides.get(
+        "attacks", base.get("attacks", RunConfig.model_fields["attacks"].get_default(
+            call_default_factory=True
+        ))
+    )
+    if not isinstance(current, list) or not all(isinstance(t, str) for t in current):
+        return
+    extended = with_controls(current)
+    if extended == current:
+        return
+    overrides["attacks"] = extended
+    before = set(attack_names(current))
+    added = [name for name in attack_names(extended) if name not in before]
+    _err.print(
+        "[yellow]note:[/yellow] the run includes an instruction-channel family, so it also runs "
+        f"the controls it is read against: {', '.join(added)}. Pass --no-controls to run only "
+        "the arms named."
+    )
 
 
 @app.command()
@@ -55,6 +104,37 @@ def attack(
     attacks: Annotated[
         str, typer.Option(help="Comma-separated attack or family names.")
     ] = "instruction",
+    no_controls: Annotated[
+        bool,
+        typer.Option(
+            "--no-controls",
+            help="Run only the arms named. By default a run that includes an instruction-channel "
+            f"family ({', '.join(INSTRUCTION_CHANNEL_FAMILIES)}) also gets the benign control "
+            "`none` and the `control` family (the harmless-variation arms), because an "
+            "instruction-channel rate is read against both.",
+        ),
+    ] = False,
+    competence_check: Annotated[
+        int | None,
+        typer.Option(
+            "--competence-check",
+            min=1,
+            help="Before the arms, run this many benign episodes per task (at the seeds after the "
+            "run's own) and refuse the adversarial arms on a task whose task success falls below "
+            "--competence-floor. The report records each task's pre-run and any refusal; the "
+            "pre-run's episodes enter no rate. Off by default; not with --resume.",
+        ),
+    ] = None,
+    competence_floor: Annotated[
+        float,
+        typer.Option(
+            "--competence-floor",
+            min=0.0,
+            max=1.0,
+            help="The task success a task's --competence-check pre-run must reach for its "
+            "adversarial arms to run (default 0.8).",
+        ),
+    ] = 0.8,
     episodes: Annotated[
         int, typer.Option(min=1, help="Total episodes per (task, attack) pair.")
     ] = 10,
@@ -82,7 +162,38 @@ def attack(
             "states against the calibration fit's (#136).",
         ),
     ] = None,
+    init_states: Annotated[
+        Path | None,
+        typer.Option(
+            "--init-states",
+            help="JSON file naming the initial state each episode starts from, per task: "
+            '{"libero_object/0": [3, 7], ...}, one entry per seed (every arm and repeat at seed '
+            "index i starts from entry i) or, when the only arm is the benign baseline, one per "
+            "episode. Any other arm needs one state per seed, so every arm at a seed starts from "
+            "one scene. Exclusive with --pin-init-states; needs a suite with fixed initial "
+            "states (LIBERO).",
+        ),
+    ] = None,
     horizon: Annotated[int, typer.Option(min=1, help="Max timesteps per episode.")] = 8,
+    termination: Annotated[
+        str,
+        typer.Option(
+            "--termination",
+            help="'first-event' (default): an episode stops at its first envelope exit or at "
+            "task success. 'fixed-horizon': every episode runs all --horizon steps in every arm, "
+            "so Succ-But-Unsafe and how long an episode stayed unsafe are observable. A suite "
+            "that cannot step past an event refuses it.",
+        ),
+    ] = "first-event",
+    record_episode_errors: Annotated[
+        bool,
+        typer.Option(
+            "--record-episode-errors",
+            help="Record a simulator exception during an episode as an UNJUDGED episode with its "
+            "reason, instead of stopping the run. Every rate then excludes it and the report "
+            "counts it beside the rate. Off by default.",
+        ),
+    ] = False,
     tasks: Annotated[
         str | None, typer.Option(help="Comma-separated task subset (default: all).")
     ] = None,
@@ -117,6 +228,24 @@ def attack(
                  "the file if absent. Not usable with --episodes-per-seed > 1.",
         ),
     ] = None,
+    record_chunks: Annotated[
+        bool,
+        typer.Option(
+            "--record-chunks",
+            help="Write chunks.npz beside report.json: every action chunk the policy predicted on "
+            "each step, including the rows that never ran, and which row each step executed. "
+            "Its sha256 goes in execution-manifest.json. Off by default; never changes the report.",
+        ),
+    ] = False,
+    record_timing: Annotated[
+        bool,
+        typer.Option(
+            "--record-timing",
+            help="Write timing.json beside report.json: when each step's observation arrived and "
+            "when its action was sent, in nanoseconds since the run started. Wall-clock, so never "
+            "in report.json; its sha256 goes in execution-manifest.json. Off by default.",
+        ),
+    ] = False,
     video_dir: Annotated[
         Path | None,
         typer.Option(
@@ -186,6 +315,17 @@ def attack(
             "run is a diagnostic: measured, and its acceptance not assessed.",
         ),
     ] = None,
+    preflight: Annotated[
+        bool,
+        typer.Option(
+            "--preflight",
+            help="Before the run, command a +x end-effector delta for a few steps on the run's "
+            "first task and refuse the run unless the end-effector moved along +x: a simulator "
+            "applying deltas in another frame than it reports the pose in (robosuite issue "
+            "819). Uses an environment of its own, so the run's scenes are unchanged. Needs a "
+            "suite that reports an end-effector position (LIBERO). Off by default.",
+        ),
+    ] = False,
 ) -> None:
     """Run a red-team evaluation and write report.json + report.md."""
     rename: dict[str, str] | None = None
@@ -247,8 +387,25 @@ def attack(
         overrides["seed"] = seed
     if _explicit("pin_init_states"):
         overrides["pin_init_states"] = pin_init_states
+    if init_states is not None:
+        try:
+            overrides["init_states"] = json.loads(init_states.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            _fail(f"--init-states {init_states}: {exc}")
+            return
     if _explicit("horizon"):
         overrides["horizon"] = horizon
+    if _explicit("termination"):
+        overrides["termination"] = termination
+    if _explicit("record_episode_errors"):
+        overrides["record_episode_errors"] = record_episode_errors
+    if _explicit("competence_check"):
+        overrides["competence_check"] = competence_check
+    if _explicit("competence_floor"):
+        if overrides.get("competence_check", base.get("competence_check")) is None:
+            _fail("--competence-floor applies only with --competence-check N")
+            return
+        overrides["competence_floor"] = competence_floor
     if _explicit("model"):
         overrides["model"] = model
     if _explicit("rename_map"):
@@ -292,6 +449,12 @@ def attack(
             "it has no effect on this run."
         )
 
+    # Controls by default (P2.1): an instruction-channel arm is read against the benign floor and
+    # the harmless-variation controls, so a run that has one gets both unless --no-controls says
+    # otherwise. Applied to the final list whatever set it (the flag, a recipe or the default).
+    if not no_controls:
+        _add_controls(overrides, base)
+
     try:
         config = RunConfig.model_validate({**base, **overrides})
     except ValidationError as exc:
@@ -306,6 +469,20 @@ def attack(
     if protocol is not None and acceptance is None:
         return
 
+    # The stack the run is about to measure on. A warning, not a refusal: a different stack is a
+    # different measurement, and execution-manifest.json records the versions either way.
+    # escape(), because the lines name "[lerobot]", which Rich would read as a style tag and drop.
+    uses_lerobot = config.suite == "libero" or config.policy in REQUIRES_LEROBOT
+    task_suite = None
+    if config.suite == "libero":
+        # A mixed or unknown task list is refused when the suite is built, below.
+        with contextlib.suppress(ValueError):
+            task_suite = suite_and_ids_from_tasks(config.tasks or [])[0]
+    for line in drift_warnings(
+        installed_versions(), suite=config.suite, uses_lerobot=uses_lerobot, task_suite=task_suite
+    ):
+        _err.print(f"[yellow]warning:[/yellow] {escape(line)}")
+
     calibrations = None
     if calib is not None:
         calibrations = load_calibrations(calib, config.policy, config.suite)
@@ -315,13 +492,28 @@ def attack(
                 f"{config.policy}/{config.suite} in {calib}; using the default predicate."
             )
 
+    if preflight:
+        # Its own suite and environment, before the policy loads: a refusal costs no download.
+        from provael.policies.preflight import PreflightError, run_frame_preflight
+
+        try:
+            checked = run_frame_preflight(config.suite, config.tasks, config.seed)
+        except (MissingLeRobotError, PreflightError) as exc:
+            _fail(str(exc))
+            return
+        _err.print(f"[green]preflight:[/green] {escape(checked.detail)}")
+
     started = time.perf_counter()
     # The defense audit trail is collected here and written as a SIDECAR, never merged into
     # report.json — a field on RunReport would move the attestation subject digest.
     defense_audit: list[dict[str, str]] = []
+    # The opt-in sidecars (P1.5) are filled the same way, and written beside the report below.
+    chunk_log = ChunkLog() if record_chunks else None
+    timing_log = TimingLog() if record_timing else None
     try:
         report = run(
-            config, calibrations, audit_sink=defense_audit, ledger_path=resume, video_dir=video_dir
+            config, calibrations, audit_sink=defense_audit, ledger_path=resume,
+            video_dir=video_dir, chunk_log=chunk_log, timing_log=timing_log,
         )
     except (MissingLeRobotError, IncompatiblePolicyError) as exc:
         _fail(str(exc))
@@ -333,10 +525,35 @@ def attack(
     except NotImplementedError as exc:
         _fail(str(exc))
         return
+    except (
+        InitStatePlanError,
+        ScenePinError,
+        ResumeModeError,
+        UnreadParameterError,
+        CompetenceCheckError,
+    ) as exc:
+        # A plan that does not fit the run is refused before anything loads; a pinned run whose
+        # arms started from different scenes stops rather than writing pairs that are not pairs;
+        # a ledger written under the other termination mode is not resumed into this one; an
+        # attack setting that was never read is not reported as in force.
+        _fail(str(exc))
+        return
     elapsed = time.perf_counter() - started
 
     decision = _decide(report, acceptance)
     json_path, md_path = write_report(report, config.out, decision)
+    sidecars: dict[str, str] = {}
+    if chunk_log is not None:
+        chunks_path, sidecars[CHUNKS_NPZ] = write_chunks(chunk_log, config.out)
+        _out.print(f"Wrote [cyan]{chunks_path}[/cyan]  (predicted action chunks)")
+        if chunk_log.space is None:
+            _err.print(
+                f"[yellow]note:[/yellow] policy {config.policy!r} hands over no action chunks; "
+                "chunks.npz records the steps and no chunk."
+            )
+    if timing_log is not None:
+        timing_path, sidecars[TIMING_JSON] = write_timing(timing_log, config.out)
+        _out.print(f"Wrote [cyan]{timing_path}[/cyan]  (per-step timing)")
     if acceptance is not None:
         decision_path = write_decision(decision, config.out)
         _out.print(
@@ -344,7 +561,8 @@ def attack(
             f"[bold]{decision.verdict.value}[/bold] -> [cyan]{decision_path}[/cyan]"
         )
     _emit_execution_manifest(
-        report, config.out, elapsed=elapsed, defense=config.defense, decision=decision
+        report, config.out, elapsed=elapsed, defense=config.defense, decision=decision,
+        sidecars=sidecars or None,
     )
     if config.defense:
         log_path = _write_defense_log(defense_audit, config.out)

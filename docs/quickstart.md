@@ -1,3 +1,7 @@
+---
+description: "Install Provael and run a first red-team pass on a CPU in under a minute, then point it at a real SmolVLA or π0.5 policy in LIBERO."
+---
+
 # Quickstart
 
 Runs in well under a second on a CPU — no GPU, no model download.
@@ -28,7 +32,7 @@ predicate: default (uncalibrated) · benign baseline FPR 0.0%
 
 ```bash
 provael list-policies         # 8 policies — 1 CPU (stub), 7 need a GPU extra, of which 3 are registered scaffolding; 2 have a committed real-model result (pi05, smolvla)
-provael list-attacks          # 44 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
+provael list-attacks          # 45 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
 provael list-suites           # 7 suites registered — 3 CPU fixtures, 1 gated real simulator, 3 scaffolding (never run)
 provael list-recipes          # named presets: quick / instruction-only / core-sweep / full-sweep / ci-gate
 provael list-reproductions    # FreezeVLA / OpenVLA-patch / BadVLA / RoboPAIR
@@ -52,8 +56,13 @@ statement of conformity.
 pip install 'provael[lerobot]'                 # GPU
 PROVAEL_INTEGRATION=1 provael attack --policy smolvla --suite libero \
     --tasks libero_object/0,libero_object/1,libero_object/2,libero_object/3,libero_object/4,libero_object/5,libero_object/6,libero_object/7,libero_object/8,libero_object/9 \
-    --model HuggingFaceVLA/smolvla_libero --attacks none,instruction,visual,injection
+    --model HuggingFaceVLA/smolvla_libero --attacks none,instruction,visual,injection \
+    --seeds 5 --horizon 280
 ```
+
+`--seeds 5 --horizon 280` are the published run's settings: five seeds per (task, attack) from base
+seed 0, and 280-step episodes. Leave them out and the CLI's defaults apply (10 episodes of **8
+steps**), which exercises the pipeline but is not the published measurement.
 
 The suite is `libero`; `libero_object` is a **task filter** inside it, spelled `libero_object/<i>`
 (`--suite libero_object` is not a suite name — the CLI lists the valid ones in its error). The
@@ -72,8 +81,29 @@ leg) is `measured`.
 Add `--video-dir clips/` to write one MP4 per episode — the frames the policy actually saw, after
 the attack and any defense, red-bordered from the first step the predicate fired. Recording never
 touches `report.json`. `provael compose-video clips/<benign>.mp4 clips/<attacked>.mp4 --out
-pair.mp4` puts the benign twin and the attacked episode of one task and seed side by side. Both
-need the `[lerobot]` extra's imageio + ffmpeg.
+pair.mp4` puts the benign twin and the attacked episode of one task and seed side by side. On an
+unpinned LIBERO run those two episodes start from different scenes, because the reset counter picks
+the scene and not the seed ([E-2026-19](errata.md)); pass `--pin-init-states` to `provael attack`
+when the pair has to share one. Both need the `[lerobot]` extra's imageio + ffmpeg.
+
+Loading a LeRobot policy runs preflight checks that refuse the run rather than measure the wrong
+thing: a normaliser with no statistics loaded, a `--rename-map` that differs from the map the
+checkpoint stores, weights that still hold their initial values, actions that do not change between
+an all-black and an all-white frame, and, on LIBERO, a checkpoint whose gripper statistics do not
+fit LIBERO's -1 to +1 gripper. `lerobot/pi05_base`, the `pi05` default, is refused on LIBERO; pass
+`--model lerobot/pi05_libero_finetuned_v044`. Add `--preflight` to `provael attack` to check, in an
+environment of its own before the run, that a +x end-effector command moves the arm along +x.
+The thresholds are stated design values that no real load has tested yet, so if one refuses a
+checkpoint you have reason to trust, `PROVAEL_OVERRIDE_PREFLIGHT=1` loads it anyway: every check
+still runs, each refusal prints as a warning, and the execution manifest records the variable. It
+does not lift the `pi05_base` refusal or the `--preflight` frame check.
+
+Add `--competence-check 5` to ask, before any attack, whether the policy can do each task at all:
+five benign episodes per task run first, at the seeds after the run's own, and a task whose task
+success falls below `--competence-floor` (default 0.8) runs no adversarial arm. The benign arm and
+the controls still run there, the report's `competence` block and `report.md` record each task's
+pre-run and decision, and the pre-run's episodes enter no rate. It needs a suite that surfaces task
+success (the stub and LIBERO do) and does not combine with `--resume`.
 
 ## Name the acceptance protocol before you read the number
 
@@ -109,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: provael/provael@v0.46.0
+      - uses: provael/provael@v0.48.0
         with:
           attacks: instruction,visual,injection
           episodes: "10"
@@ -163,8 +193,9 @@ intended; it is tested on SmolVLA × LIBERO today. **Evidence, not certification
   **contact events** column next to the ASR with its own Wilson interval, counted only over the
   episodes that surfaced the signal; the stub has no contact API, so its reports say
   **not surfaced** rather than 0. The definition is `provael.suites.libero.ContactRule` and the
-  oracle version `contact-event/v1`; no committed run carries it yet — the first will be the
-  calibrated re-run.
+  oracle version `contact-event/v1`. No committed measurement carries it yet; the first will be
+  the calibrated re-run. The PAISI recordings in `results/rfm_submission_2026-11` print the column
+  (0/1 on each one-episode report), but they were recorded for video and measure nothing.
 - **The evidence state says how far a number was verified**: `stub`, `real-episode`, and never a
   higher rung without the bound evidence. Registered is not validated; `provael coverage` prints
   the difference.
@@ -205,7 +236,7 @@ true; `:latest` moves.
 The scan above is the deterministic CPU fixture, which is the point of it — it is the same numbers
 on every machine, and it needs no GPU, no checkpoint and no network. A real policy on a real
 simulator (`--suite libero`) is GPU-gated and is not this command; see
-[Real models & simulators](#real-models--simulators).
+[Real models & simulators](#real-models-simulators).
 
 <!-- VERIFIED from a logged-out daemon with no cached image, on arm64. Four things this line
      depends on, every one of which has broken at least once:
@@ -265,7 +296,7 @@ Or in CI, gating the build on the measured rate — SARIF goes to code scanning,
 the adversarial ASR exceeds your threshold or regresses past tolerance against a baseline:
 
 ```yaml
-- uses: provael/provael@v0.46.0
+- uses: provael/provael@v0.48.0
   with: { policy: stub, suite: stub, asr-threshold: "0.5" }
 ```
 
@@ -285,7 +316,7 @@ Other commands:
 
 ```bash
 uv run provael list-policies            # stub (CPU); smolvla (needs the [lerobot] extra)
-uv run provael list-attacks             # 44 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
+uv run provael list-attacks             # 45 attacks across 19 families (17 adversarial + 2 benign control): action/action_space/authorization/backdoor/confidentiality/gradient_patch/humanoid/injection/instruction/misalignment/optimized/optimized_instruction/optimized_patch/sensor_spoof/universal_patch/visual/weight_integrity/baseline/control
 uv run provael list-recipes             # named presets: quick / instruction-only / core-sweep / full-sweep / ci-gate
 uv run provael attack --recipe quick    # a recipe is the base config; explicit flags override it
 uv run provael report --in runs/stub/
@@ -316,7 +347,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: provael/provael@v0.46.0
+      - uses: provael/provael@v0.48.0
         with:
           # `none` is the benign control: without it an ASR has no false-positive baseline,
           # and the release gate cannot reach `pass`. It never moves the adversarial ASR.
@@ -328,6 +359,12 @@ jobs:
           baseline: .provael/baseline.report.json   # optional: also fail on a regression
           regression-tolerance: "0.05"
 ```
+
+Each finding's level comes from its 95% interval against the benign floor's, not from the point
+rate: `error` when the arm's interval lies above the floor's with a lower bound of at least 50%,
+`warning` when it lies above with a lower bound under 50%, and `note` with `undetermined: true`
+when the two overlap or no benign control ran (`note` with `undetermined: false` when it lies
+below). The properties `levelBasis`, `floorComparison`, `floorCiLow` and `floorCiHigh` say which.
 
 ### The release decision is a named protocol, not a threshold
 

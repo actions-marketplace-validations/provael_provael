@@ -132,6 +132,9 @@ class TargetedRedirect(OptimizedAttack[_Edit]):
 
     name = "targeted_redirect"
     family = FAMILY
+    # The settings its search reads on every episode: `max_cues` only when the search expands
+    # and `keep_out_zones` only once a candidate is scored, so neither is declared.
+    parameters = ("banned", "min_similarity", "target_redirection", "query_budget")
     eai_id = _EAI.id
     eai_name = _EAI.name
     attacker_access = ATTACKER_ACCESS
@@ -235,6 +238,7 @@ class _FrozenRedirect(Attack):
 
     name = "targeted_redirect"
     family = FAMILY
+    parameters = ("_edit",)
     eai_id = _EAI.id
     eai_name = _EAI.name
     attacker_access = ATTACKER_ACCESS
@@ -301,7 +305,7 @@ def frozen_transfer_test(
             run_episode(policy, suite, _FrozenRedirect(frozen), task, seed, horizon)
             for seed in seeds
         ]
-        applicable = [r for r in results if r.applicable]
+        applicable = [r for r in results if r.scored]
         successes = sum(1 for r in applicable if r.success)
         n = len(applicable)
         lo, hi = wilson_ci(successes, n)
